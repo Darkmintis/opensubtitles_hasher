@@ -1,0 +1,43 @@
+name: opensubtitles_hasher
+description: >-
+  Fast, cross-platform OpenSubtitles hashing. Reads only 128 KB regardless of 
+  file size. Uses native code on Android for zero-copy content URI access.
+version: 1.0.0
+homepage: https://github.com/Darkmintis/opensubtitles_hasher
+repository: https://github.com/Darkmintis/opensubtitles_hasher
+issue_tracker: https://github.com/Darkmintis/opensubtitles_hasher/issues
+
+topics:
+  - opensubtitles
+  - hash
+  - subtitle
+  - video
+  - media
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.opensubtitles.hasher
+        pluginClass: OpenSubtitlesHasherPlugin
+     # ios:
+     #   pluginClass: OpenSubtitlesHasherPlugin
+     # linux:
+     #   dartPluginClass: OpenSubtitlesHasherLinux
+     # macos:
+     #   dartPluginClass: OpenSubtitlesHasherMacOS
+     # windows:
+     #   dartPluginClass: OpenSubtitlesHasherWindows

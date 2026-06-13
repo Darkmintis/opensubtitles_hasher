@@ -1,0 +1,33 @@
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    # Style
+    - prefer_single_quotes
+    - prefer_const_constructors
+    - prefer_const_declarations
+    - prefer_final_fields
+    - prefer_final_locals
+    - unnecessary_const
+    - unnecessary_new
+    - use_super_parameters
+
+    # Safety
+    - avoid_dynamic_calls
+    - avoid_returning_null_for_future
+    - cancel_subscriptions
+    - close_sinks
+
+    # Documentation
+    - public_member_api_docs
+
+    # Performance
+    - avoid_slow_async_io
+
+analyzer:
+  errors:
+    missing_required_param: error
+    missing_return: error
+  strong-mode:
+    implicit-casts: false
+    implicit-dynamic: false
