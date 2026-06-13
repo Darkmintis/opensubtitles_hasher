@@ -1,13 +1,28 @@
-# opensubtitles_hasher
-
-Pure-Dart OpenSubtitles hashing for Flutter and Dart apps.
+# opensubtitles\_hasher
 
 [![pub.dev](https://img.shields.io/pub/v/opensubtitles_hasher.svg)](https://pub.dev/packages/opensubtitles_hasher)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## What it does
+Fast, cross-platform OpenSubtitles hashing for Flutter and Dart apps. Reads only 128 KB regardless of file size — O(1) in memory and I/O.
 
-`opensubtitles_hasher` computes the OpenSubtitles movie hash by reading only the first and last 64 KB of a file. It also returns the file size when you need it for the OpenSubtitles API.
+## What is the OpenSubtitles hash?
+
+The [OpenSubtitles API](https://opensubtitles.com) uses a file hash to identify movie files. The hash is computed as:
+
+```
+hash = fileSize + sum(head 64KB as uint64 LE) + sum(tail 64KB as uint64 LE)
+```
+
+Only the first and last 64 KB are read, so even 50 GB files hash instantly. The hash is combined with the file size when making API requests for subtitle search.
+
+## Features
+
+- **Fast** — reads only 128 KB total via `RandomAccessFile`
+- **Pure Dart** — works on all desktop and mobile platforms
+- **Android content URI** — native plugin for zero-copy hashing from `content://` URIs (no file copy)
+- **Sync & async APIs** — choose what fits your use case
+- **No runtime dependencies** — zero transitive package weight
+- **Null-safe** — Dart 3 fully sound
 
 ## Install
 
@@ -25,59 +40,121 @@ flutter pub get
 ```dart
 import 'package:opensubtitles_hasher/opensubtitles_hasher.dart';
 
+// Just the hash
 final hash = await OpenSubtitlesHasher.computeHash('/path/to/movie.mp4');
+
+// Hash + file size (for the OpenSubtitles API)
 final result = await OpenSubtitlesHasher.computeHashResult('/path/to/movie.mp4');
 
-print(hash);
-print(result.fileSize);
-print(result.toApiMap());
+print(result.hash);        // "8e245d9679d31e12"
+print(result.fileSize);    // 129994823
+print(result.toApiMap());  // {moviehash: 8e245d9679d31e12, moviebytesize: 129994823}
 ```
 
-## API
+## API reference
 
 ### `OpenSubtitlesHasher`
 
-- `computeHash(String path)` returns a `Future<String>`
-- `computeHashSync(String path)` returns a `String`
-- `computeFileHash(File file)` returns a `Future<String>`
-- `computeHashResult(String path)` returns a `Future<HashResult>`
-- `isValidHash(String hash)` returns a `bool`
+Platform-aware entry point. On Android with `content://` URIs it delegates to native Kotlin code; everywhere else it uses the pure Dart implementation.
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `computeHash(String path)` | `Future<String>` | 16-char lowercase hex hash |
+| `computeHashResult(String path)` | `Future<HashResult>` | Hash + file size + API map |
+| `computeHashSync(String path)` | `String` | Synchronous variant (Dart only) |
+| `computeFileHash(File file)` | `Future<String>` | Hash from a `dart:io` `File` object |
+| `isValidHash(String hash)` | `bool` | Validates 16-char lowercase hex format |
 
 ### `HashResult`
 
-- `hash` - 16-character lowercase hex hash
-- `fileSize` - file size in bytes
-- `filePath` - file path that was hashed
-- `toApiMap()` - returns `{ moviehash, moviebytesize }`
+Contains both values required by the OpenSubtitles search API.
 
-## Example
+| Property | Type | Description |
+|----------|------|-------------|
+| `hash` | `String` | 16-char lowercase hex |
+| `fileSize` | `int` | File size in bytes |
+| `filePath` | `String` | Original file path |
+| `toApiMap()` | `Map<String, String>` | `{moviehash, moviebytesize}` |
 
-See the `example/` folder for a small Flutter app that picks a video file and computes its hash.
+### Using with the OpenSubtitles API
 
-## Behavior
+```dart
+final result = await OpenSubtitlesHasher.computeHashResult(file.path);
 
-- Reads only 128 KB total
-- Uses `RandomAccessFile` instead of loading the whole file into memory
-- Throws `FileSystemException` when the file cannot be opened
-- Throws `InvalidFileException` when the file is smaller than 64 KB
+// Use the hash and file size to search for subtitles
+final response = await dio.post(
+  'https://api.opensubtitles.com/api/v1/subtitles',
+  data: result.toApiMap(),
+);
+```
+
+### Android content URI support
+
+When the file comes from a content picker (e.g., `file_picker` or `Intent.ACTION_OPEN_DOCUMENT`), pass the `content://` URI directly — the native plugin reads the file descriptor without copying:
+
+```dart
+// file_picker example
+final result = await FilePicker.platform.pickFiles(type: FileType.video);
+final uri = result.files.single.path;  // content://...
+final hash = await OpenSubtitlesHasher.computeHash(uri);
+```
+
+## Error handling
+
+| Error | Cause |
+|-------|-------|
+| `FileSystemException` | File doesn't exist or can't be opened |
+| `InvalidFileException` | File is smaller than 64 KB (minimum required by the algorithm) |
+
+```dart
+try {
+  final hash = await OpenSubtitlesHasher.computeHash(path);
+} on FileSystemException {
+  // Handle missing/unreadable file
+} on InvalidFileException {
+  // Handle files too small to hash
+}
+```
 
 ## Platform support
 
-- Android: supported
-- iOS: supported
-- macOS: supported
-- Windows: supported
-- Linux: supported
-- Web: not supported
+| Platform | Dart (path) | Android (content URI) |
+|----------|-------------|----------------------|
+| Android  | ✅ | ✅ native |
+| iOS      | ✅ | n/a |
+| macOS    | ✅ | n/a |
+| Windows  | ✅ | n/a |
+| Linux    | ✅ | n/a |
+| Web      | ❌ | ❌ |
 
-## Package quality
+## How it works
 
-- No runtime dependencies
-- Dart 3 null-safe
-- Standard `lib/`, `test/`, and `example/` layout
-- `flutter test` passes
-- `flutter pub publish --dry-run` passes
+1. Opens the file with `RandomAccessFile`
+2. Reads the first 64 KB
+3. Reads the last 64 KB (seeks to `fileSize - 65536`)
+4. Interprets each 8-byte chunk as a little-endian unsigned 64-bit integer
+5. Sums all values and adds the total file size
+6. Returns the 16-character lowercase hex result
+
+The 64-bit arithmetic is implemented using two 32-bit halves to avoid JavaScript precision issues on the web (though web itself is not supported).
+
+## Development
+
+```bash
+# Run tests
+flutter test
+
+# Check publish readiness
+flutter pub publish --dry-run
+
+# Publish
+flutter pub publish
+```
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
