@@ -90,10 +90,11 @@ final response = await dio.post(
 
 ### Android content URI support
 
-When the file comes from a content picker (e.g., `file_picker` or `Intent.ACTION_OPEN_DOCUMENT`), pass the `content://` URI directly — the native plugin reads the file descriptor without copying:
+On modern Android, files picked via `Intent.ACTION_OPEN_DOCUMENT` or libraries like `file_picker` return `content://` URIs — not file paths. Dart's `File` class cannot read these URIs directly. Without the native plugin, you'd need to copy the entire file to a temp location before hashing, which is slow and wasteful.
+
+`opensubtitles_hasher` solves this with a native Kotlin plugin that reads the content URI's file descriptor directly — zero copy, zero temp files:
 
 ```dart
-// file_picker example
 final result = await FilePicker.platform.pickFiles(type: FileType.video);
 final uri = result.files.single.path;  // content://...
 final hash = await OpenSubtitlesHasher.computeHash(uri);
@@ -137,19 +138,6 @@ try {
 6. Returns the 16-character lowercase hex result
 
 The 64-bit arithmetic is implemented using two 32-bit halves to avoid JavaScript precision issues on the web (though web itself is not supported).
-
-## Development
-
-```bash
-# Run tests
-flutter test
-
-# Check publish readiness
-flutter pub publish --dry-run
-
-# Publish
-flutter pub publish
-```
 
 ## Changelog
 
