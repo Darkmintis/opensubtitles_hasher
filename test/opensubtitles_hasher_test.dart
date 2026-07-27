@@ -1,11 +1,15 @@
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:opensubtitles_hasher/opensubtitles_hasher.dart';
-import 'package:opensubtitles_hasher/src/hasher.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const filePickerChannel = MethodChannel('miguelruivo.flutter.plugins.filepicker');
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(filePickerChannel, (call) async => null);
+
   group('OpenSubtitlesHasher', () {
     late Directory tempDir;
 
@@ -22,18 +26,14 @@ void main() {
 
       final hash = await OpenSubtitlesHasher.computeHash(file.path);
 
-      // For a 64KB (65536 bytes) zero-filled file:
-      // hash = size (65536) + sum(first 64KB) + sum(last 64KB)
-      // Both sums = 0, so hash = 65536 = 0x0000000000010000
       expect(hash, '0000000000010000');
     });
 
     test('sync and async produce identical results', () async {
       final file = await _createTestFile(tempDir, sizeInKB: 256);
 
-      // Use OpenSubtitlesHasherImpl for sync version
       final asyncHash = await OpenSubtitlesHasher.computeHash(file.path);
-      final syncHash = OpenSubtitlesHasherImpl.computeHashSync(file.path);
+      final syncHash = OpenSubtitlesHasher.computeHashSync(file.path);
 
       expect(asyncHash, equals(syncHash));
     });
@@ -42,10 +42,17 @@ void main() {
       final file = await _createTestFile(tempDir, sizeInKB: 256);
 
       final byPath = await OpenSubtitlesHasher.computeHash(file.path);
-      // Use OpenSubtitlesHasherImpl for computeFileHash
-      final byFile = await OpenSubtitlesHasherImpl.computeFileHash(file);
+      final byFile = await OpenSubtitlesHasher.computeFileHash(file);
 
       expect(byPath, equals(byFile));
+    });
+
+    test('isContentUri detects content URIs', () {
+      expect(
+        OpenSubtitlesHasher.isContentUri('content://media/1'),
+        isTrue,
+      );
+      expect(OpenSubtitlesHasher.isContentUri('/storage/movie.mkv'), isFalse);
     });
 
     group('computeHashResult', () {
@@ -121,33 +128,173 @@ void main() {
         );
       });
 
+      test('throws InvalidFileException for sync path under 64 KB', () {
+        final smallFile = File('${tempDir.path}/small_sync.mp4');
+        smallFile.writeAsBytesSync(List.filled(1024, 0));
+
+        expect(
+          () => OpenSubtitlesHasher.computeHashSync(smallFile.path),
+          throwsA(isA<InvalidFileException>()),
+        );
+      });
+
       test('handles exactly 64 KB file', () async {
         final file = await _createTestFile(tempDir, sizeInKB: 64);
         final hash = await OpenSubtitlesHasher.computeHash(file.path);
         expect(hash.length, equals(16));
       });
+
+      test('content URI on non-Android falls through to Dart filesystem read',
+          () async {
+        expect(
+          () => OpenSubtitlesHasher.computeHash('content://example/video.mp4'),
+          throwsA(isA<FileSystemException>()),
+        );
+      }, skip: Platform.isAndroid ? 'Android uses native channel' : false);
+    });
+
+    group('pickMovie', () {
+      test('returns null on non-Android when user cancels picker', () async {
+        final picked = await OpenSubtitlesHasher.pickMovie();
+        expect(picked, isNull);
+      }, skip: Platform.isAndroid ? 'Android uses native channel' : false);
+
+      test('pickAndHash returns null on non-Android when user cancels', () async {
+        final picked = await OpenSubtitlesHasher.pickAndHash();
+        expect(picked, isNull);
+      }, skip: Platform.isAndroid ? 'Android uses native channel' : false);
+    });
+
+    group('MoviePickerOptions', () {
+      test('defaults have no size or duration filters', () {
+        const options = MoviePickerOptions.defaults;
+        expect(options.mimeTypes, MoviePickerOptions.defaultMimeTypes);
+        expect(options.minSizeBytes, isNull);
+        expect(options.maxSizeBytes, isNull);
+        expect(options.minDuration, isNull);
+        expect(options.maxDuration, isNull);
+        expect(options.hasPostPickFilters, isFalse);
+      });
+
+      test('copyWith overrides only provided fields', () {
+        final options = MoviePickerOptions.defaults.copyWith(
+          mimeTypes: const ['video/mp4'],
+          minSizeBytes: 1000,
+          minDuration: const Duration(minutes: 45),
+        );
+
+        expect(options.mimeTypes, ['video/mp4']);
+        expect(options.minSizeBytes, 1000);
+        expect(options.maxSizeBytes, isNull);
+        expect(options.minDuration, const Duration(minutes: 45));
+        expect(options.maxDuration, isNull);
+        expect(options.hasPostPickFilters, isTrue);
+      });
+
+      test('toChannelMap serializes filters', () {
+        final options = MoviePickerOptions.defaults.copyWith(
+          mode: MoviePickerMode.systemDocuments,
+          mimeTypes: const ['video/mp4', 'video/x-matroska'],
+          minSizeBytes: 1000,
+          maxSizeBytes: 5000,
+          minDuration: const Duration(minutes: 45),
+          maxDuration: const Duration(hours: 3),
+          takePersistablePermission: false,
+        );
+
+        final map = options.toChannelMap();
+        expect(map['mode'], 'systemDocuments');
+        expect(map['mimeTypes'], ['video/mp4', 'video/x-matroska']);
+        expect(map['minSizeBytes'], 1000);
+        expect(map['maxSizeBytes'], 5000);
+        expect(map['minDurationMs'], 45 * 60 * 1000);
+        expect(map['maxDurationMs'], 3 * 60 * 60 * 1000);
+        expect(map['takePersistablePermission'], isFalse);
+      });
+
+      test('defaults use mediaStore mode', () {
+        expect(
+          MoviePickerOptions.defaults.mode,
+          MoviePickerMode.mediaStore,
+        );
+        expect(
+          MoviePickerOptions.defaults.toChannelMap()['mode'],
+          'mediaStore',
+        );
+      });
     });
 
     group('isValidHash', () {
       test('accepts valid 16-char lowercase hex', () {
-        // Use OpenSubtitlesHasherImpl for isValidHash
-        expect(OpenSubtitlesHasherImpl.isValidHash('8e245d9679d31e12'), isTrue);
-        expect(OpenSubtitlesHasherImpl.isValidHash('0000000000000000'), isTrue);
-        expect(OpenSubtitlesHasherImpl.isValidHash('ffffffffffffffff'), isTrue);
+        expect(OpenSubtitlesHasher.isValidHash('8e245d9679d31e12'), isTrue);
+        expect(OpenSubtitlesHasher.isValidHash('0000000000000000'), isTrue);
+        expect(OpenSubtitlesHasher.isValidHash('ffffffffffffffff'), isTrue);
       });
 
       test('rejects invalid hashes', () {
-        expect(OpenSubtitlesHasherImpl.isValidHash(''), isFalse);
-        expect(OpenSubtitlesHasherImpl.isValidHash('8E245D9679D31E12'), isFalse);
-        expect(OpenSubtitlesHasherImpl.isValidHash('8e245d9679d31e1'), isFalse);
-        expect(OpenSubtitlesHasherImpl.isValidHash('8e245d9679d31e123'), isFalse);
-        expect(OpenSubtitlesHasherImpl.isValidHash('8e245d9679d31eXY'), isFalse);
+        expect(OpenSubtitlesHasher.isValidHash(''), isFalse);
+        expect(OpenSubtitlesHasher.isValidHash('8E245D9679D31E12'), isFalse);
+        expect(OpenSubtitlesHasher.isValidHash('8e245d9679d31e1'), isFalse);
+        expect(OpenSubtitlesHasher.isValidHash('8e245d9679d31e123'), isFalse);
+        expect(OpenSubtitlesHasher.isValidHash('8e245d9679d31eXY'), isFalse);
       });
+    });
+
+    group('oshash reference vectors', () {
+      test('matches opensubtitles/oshash testfile.bin vector', () async {
+        final file = await _createOshashReferenceFile(
+          tempDir,
+          seed: 42,
+          size: 1048576,
+          name: 'testfile.bin',
+        );
+
+        final hash = await OpenSubtitlesHasher.computeHash(file.path);
+
+        expect(hash, 'e7e2e71e035b137f');
+      }, skip: !Platform.isLinux && !Platform.isMacOS && !Platform.isWindows);
+
+      test('matches opensubtitles/oshash testfile_small.bin vector', () async {
+        final file = await _createOshashReferenceFile(
+          tempDir,
+          seed: 123,
+          size: 131080,
+          name: 'testfile_small.bin',
+        );
+
+        final hash = await OpenSubtitlesHasher.computeHash(file.path);
+
+        expect(hash, '6e4ae67790577f76');
+      }, skip: !Platform.isLinux && !Platform.isMacOS && !Platform.isWindows);
     });
   });
 }
 
-// Helper: Create test file with pseudo-random content
+Future<File> _createOshashReferenceFile(
+  Directory dir, {
+  required int seed,
+  required int size,
+  required String name,
+}) async {
+  final result = await Process.run(
+    'python3',
+    [
+      '-c',
+      'import random, sys; random.seed($seed); '
+          'sys.stdout.buffer.write(bytes(random.getrandbits(8) for _ in range($size)))',
+    ],
+    stdoutEncoding: null,
+  );
+
+  if (result.exitCode != 0) {
+    fail('Failed to generate oshash reference file: ${result.stderr}');
+  }
+
+  final file = File('${dir.path}/$name');
+  await file.writeAsBytes(result.stdout as List<int>);
+  return file;
+}
+
 Future<File> _createTestFile(
   Directory dir, {
   required int sizeInKB,
@@ -166,7 +313,6 @@ Future<File> _createTestFile(
   return file;
 }
 
-// Helper: Create file filled with zeros
 Future<File> _createZeroFile(
   Directory dir, {
   required int sizeInKB,
@@ -179,7 +325,6 @@ Future<File> _createZeroFile(
   return file;
 }
 
-// Helper: Create file filled with specific byte value
 Future<File> _createFilledFile(
   Directory dir, {
   required int sizeInKB,
