@@ -1,0 +1,16 @@
+name: Publish to pub.dev
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+
+jobs:
+  publish:
+    permissions:
+      id-token: write # Required for authentication using OIDC
+      contents: read
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    # Package lives at repository root; uncomment if you move it into a subfolder:
+    # with:
+    #   working-directory: path/to/package/within/repository
