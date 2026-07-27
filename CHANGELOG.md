@@ -1,34 +1,53 @@
 # Changelog
 
-## 1.0.0
+All notable changes to this project are documented in this file.
 
-Initial release of `opensubtitles_hasher`.
+## [1.1.0] - 2026-07-27
 
-### Features
+### Added
 
-- **`OpenSubtitlesHasher.computeHash(path)`** — async hashing from a file path
-- **`OpenSubtitlesHasher.computeHashSync(path)`** — synchronous hashing for non-async contexts
-- **`OpenSubtitlesHasher.computeFileHash(file)`** — hash from a `dart:io` `File` object
-- **`OpenSubtitlesHasher.computeHashResult(path)`** — single call returning both hash and file size
-- **`OpenSubtitlesHasher.isValidHash(hash)`** — validate OpenSubtitles hash format
-- **`HashResult.toApiMap()`** — produces `{moviehash, moviebytesize}` for REST API calls
+- **Cross-platform picker** - `pickMovie()` and `pickAndHash()` now work on
+  Android, iOS, macOS, Windows, and Linux. No `file_picker` code needed in
+  your app; the package handles it internally.
+- `PickedMovie.effectivePath` - always use this with `computeHashResult`;
+  resolves to `uri` on Android (zero-copy) or `path` elsewhere.
+- `PickedMovie.path` for non-Android filesystem results.
+- Android **folder browser** (`MoviePickerMode.mediaStore`): folders → videos
+  only (images/documents never listed); disable via `systemDocuments`.
+- `MoviePickerOptions` - override mode, MIME, min/max size, min/max duration
+  via constructor or `copyWith` (defaults: folder browser, `video/*`, no limits).
+- Filters apply in the MediaStore query so non-matching videos never appear.
+- Interactive example app: toggle folder browser, step duration/size, MIME chips
+  (Android); cross-platform picker button on all platforms.
+- `MovieFilterException` for documents-mode post-pick filter failures.
+- `OpenSubtitlesHasher.pickAndHash()` convenience API.
+- `PickedMovie.duration` when available (Android folder browser).
+- Modular Android Kotlin (`hash/`, `picker/`, `mediastore/`, `ui/`) and Dart
+  (`models/`, `platform/`).
+- Plugin requests `READ_MEDIA_VIDEO` / storage; falls back to Documents UI if denied.
 
-### Android
+### Fixed
 
-- Native Kotlin plugin for zero-copy hashing from `content://` URIs
-- File size retrieval via `ContentResolver` without opening the file
-- Persistable URI permission handling for long-lived access
-- Built-in `pickMovie` activity for native file selection
+- Android hashing uses native code only for `content://` URIs; filesystem
+  paths use Dart again
+- Native hash runs off the UI thread
+- Content URI errors no longer fall back to a broken Dart file read
+- Kotlin rejects files under 64 KB, matching Dart
+- Kotlin chunk summing aligned with the OpenSubtitles reference
+- Picker no longer duplicates activity listeners or leaves Futures hanging
+- Plugin declares `minSdk 21`
 
-### Performance
+### Docs
 
-- Reads only 128 KB per file (first and last 64 KB) regardless of file size
-- Uses `RandomAccessFile` — no full file loading into memory
-- 64-bit arithmetic implemented with two 32-bit halves for precision
+- README covers hasher + customizable folder browser picker
 
-### Quality
+## [1.0.0] - 2026-06-14
 
-- 100% null-safe (Dart 3)
-- Zero runtime dependencies
-- 12 unit tests covering determinism, edge cases, and validation
-- `flutter test` and `flutter pub publish --dry-run` pass cleanly
+### Added
+
+- `OpenSubtitlesHasher.computeHash()` and `computeHashResult()` for file paths
+  and Android `content://` URIs
+- `HashResult` with `toApiMap()` for OpenSubtitles API requests
+- `InvalidFileException` for files smaller than 64 KB
+- Android native plugin for zero-copy hashing from content URIs
+- Pure Dart implementation for filesystem paths on mobile and desktop

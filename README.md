@@ -1,148 +1,194 @@
-# opensubtitles\_hasher
+# opensubtitles_hasher
 
 [![pub.dev](https://img.shields.io/pub/v/opensubtitles_hasher.svg)](https://pub.dev/packages/opensubtitles_hasher)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Fast, cross-platform OpenSubtitles hashing for Flutter and Dart apps. Reads only 128 KB regardless of file size — O(1) in memory and I/O.
+Fast OpenSubtitles hashing and movie picking for Flutter - all platforms, one API.
 
-## What is the OpenSubtitles hash?
+- **Instant hash** - reads only **128 KB**, even for 50 GB files
+- **Built-in picker** - works on Android, iOS, macOS, Windows, and Linux
+- **Android folder browser** - videos only, no images or docs; filters apply at the query level
+- **Zero-copy** - Android `content://` URI → native Kotlin hash (no full-file copy)
 
-The [OpenSubtitles API](https://opensubtitles.com) uses a file hash to identify movie files. The hash is computed as:
-
-```
-hash = fileSize + sum(head 64KB as uint64 LE) + sum(tail 64KB as uint64 LE)
-```
-
-Only the first and last 64 KB are read, so even 50 GB files hash instantly. The hash is combined with the file size when making API requests for subtitle search.
-
-## Features
-
-- **Fast** — reads only 128 KB total via `RandomAccessFile`
-- **Pure Dart** — works on all desktop and mobile platforms
-- **Android content URI** — native plugin for zero-copy hashing from `content://` URIs (no file copy)
-- **Sync & async APIs** — choose what fits your use case
-- **No runtime dependencies** — zero transitive package weight
-- **Null-safe** — Dart 3 fully sound
+---
 
 ## Install
 
 ```yaml
 dependencies:
-  opensubtitles_hasher: ^1.0.0
+  opensubtitles_hasher: ^1.1.0
 ```
 
 ```bash
 flutter pub get
 ```
 
+---
+
 ## Quick start
+
+### Pick and hash (any platform)
 
 ```dart
 import 'package:opensubtitles_hasher/opensubtitles_hasher.dart';
 
-// Just the hash
-final hash = await OpenSubtitlesHasher.computeHash('/path/to/movie.mp4');
-
-// Hash + file size (for the OpenSubtitles API)
-final result = await OpenSubtitlesHasher.computeHashResult('/path/to/movie.mp4');
-
-print(result.hash);        // "8e245d9679d31e12"
-print(result.fileSize);    // 129994823
-print(result.toApiMap());  // {moviehash: 8e245d9679d31e12, moviebytesize: 129994823}
-```
-
-## API reference
-
-### `OpenSubtitlesHasher`
-
-Platform-aware entry point. On Android with `content://` URIs it delegates to native Kotlin code; everywhere else it uses the pure Dart implementation.
-
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `computeHash(String path)` | `Future<String>` | 16-char lowercase hex hash |
-| `computeHashResult(String path)` | `Future<HashResult>` | Hash + file size + API map |
-| `computeHashSync(String path)` | `String` | Synchronous variant (Dart only) |
-| `computeFileHash(File file)` | `Future<String>` | Hash from a `dart:io` `File` object |
-| `isValidHash(String hash)` | `bool` | Validates 16-char lowercase hex format |
-
-### `HashResult`
-
-Contains both values required by the OpenSubtitles search API.
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `hash` | `String` | 16-char lowercase hex |
-| `fileSize` | `int` | File size in bytes |
-| `filePath` | `String` | Original file path |
-| `toApiMap()` | `Map<String, String>` | `{moviehash, moviebytesize}` |
-
-### Using with the OpenSubtitles API
-
-```dart
-final result = await OpenSubtitlesHasher.computeHashResult(file.path);
-
-// Use the hash and file size to search for subtitles
-final response = await dio.post(
-  'https://api.opensubtitles.com/api/v1/subtitles',
-  data: result.toApiMap(),
-);
-```
-
-### Android content URI support
-
-On modern Android, files picked via `Intent.ACTION_OPEN_DOCUMENT` or libraries like `file_picker` return `content://` URIs — not file paths. Dart's `File` class cannot read these URIs directly. Without the native plugin, you'd need to copy the entire file to a temp location before hashing, which is slow and wasteful.
-
-`opensubtitles_hasher` solves this with a native Kotlin plugin that reads the content URI's file descriptor directly — zero copy, zero temp files:
-
-```dart
-final result = await FilePicker.platform.pickFiles(type: FileType.video);
-final uri = result.files.single.path;  // content://...
-final hash = await OpenSubtitlesHasher.computeHash(uri);
-```
-
-## Error handling
-
-| Error | Cause |
-|-------|-------|
-| `FileSystemException` | File doesn't exist or can't be opened |
-| `InvalidFileException` | File is smaller than 64 KB (minimum required by the algorithm) |
-
-```dart
-try {
-  final hash = await OpenSubtitlesHasher.computeHash(path);
-} on FileSystemException {
-  // Handle missing/unreadable file
-} on InvalidFileException {
-  // Handle files too small to hash
+final picked = await OpenSubtitlesHasher.pickAndHash();
+if (picked != null) {
+  print(picked.hash.hash);       // e.g. 8e245d9679d31e12
+  print(picked.hash.fileSize);   // bytes
+  print(picked.hash.toApiMap()); // {moviehash, moviebytesize} for the API
 }
 ```
 
-## Platform support
+That's it. No `file_picker` code, no platform checks - the package handles everything.
 
-| Platform | Dart (path) | Android (content URI) |
-|----------|-------------|----------------------|
-| Android  | ✅ | ✅ native |
-| iOS      | ✅ | n/a |
-| macOS    | ✅ | n/a |
-| Windows  | ✅ | n/a |
-| Linux    | ✅ | n/a |
-| Web      | ❌ | ❌ |
+### Just pick
 
-## How it works
+```dart
+final movie = await OpenSubtitlesHasher.pickMovie();
+if (movie == null) return; // user cancelled
 
-1. Opens the file with `RandomAccessFile`
-2. Reads the first 64 KB
-3. Reads the last 64 KB (seeks to `fileSize - 65536`)
-4. Interprets each 8-byte chunk as a little-endian unsigned 64-bit integer
-5. Sums all values and adds the total file size
-6. Returns the 16-character lowercase hex result
+final result = await OpenSubtitlesHasher.computeHashResult(movie.effectivePath);
+```
 
-The 64-bit arithmetic is implemented using two 32-bit halves to avoid JavaScript precision issues on the web (though web itself is not supported).
+### Just hash (path you already have)
 
-## Changelog
+```dart
+final result = await OpenSubtitlesHasher.computeHashResult('/path/to/movie.mkv');
+print(result.hash);
+print(result.toApiMap()); // ready for the OpenSubtitles API
+```
 
-See [CHANGELOG.md](CHANGELOG.md).
+---
+
+## Platform behaviour
+
+| Platform | Picker | Hash |
+|----------|--------|------|
+| Android | Native folder browser (MediaStore) + SAF fallback | Native Kotlin (zero-copy `content://`) |
+| iOS / macOS / Windows / Linux | System file dialog (video extensions) | Pure Dart |
+| Web | Not supported | Not supported |
+
+On Android, the folder browser shows **only folders that contain matching videos**. Images and documents never appear. Filters (duration, size, MIME) are applied in the MediaStore query - short clips and small files are hidden before the UI renders.
+
+On other platforms the system file dialog filters by video extension. Duration and size cannot be pre-filtered on those platforms.
+
+---
+
+## Android picker - make it yours
+
+```dart
+await OpenSubtitlesHasher.pickMovie(
+  options: MoviePickerOptions.defaults.copyWith(
+    // Folder browser on by default. Switch to system Documents UI:
+    // mode: MoviePickerMode.systemDocuments,
+
+    mimeTypes: ['video/mp4', 'video/x-matroska'],
+    minSizeBytes: 50 * 1024 * 1024,       // at least 50 MB
+    minDuration: Duration(minutes: 30),   // hides clips shorter than 30 min
+    toolbarColorHex: '#1F6FEB',           // optional toolbar colour
+    toolbarOnColorHex: '#FFFFFF',         // toolbar text / icon colour
+    statusBarColorHex: '#174EA6',         // status bar colour
+  ),
+);
+```
+
+| Option | What it does |
+|--------|--------------|
+| `mode` | `mediaStore` = folder browser · `systemDocuments` = system file UI |
+| `mimeTypes` | Which video types to show (default: `video/*`) |
+| `minSizeBytes` / `maxSizeBytes` | Size limits (`null` = off) |
+| `minDuration` / `maxDuration` | Duration limits (`null` = off) |
+| `toolbarColorHex` | Folder browser toolbar colour (`#RRGGBB` / `#AARRGGBB`) |
+| `toolbarOnColorHex` | Toolbar title + icon colour |
+| `statusBarColorHex` | Status bar colour for the picker screen |
+| `takePersistablePermission` | Keep URI readable later (Documents mode only) |
+
+The folder browser requests video read permission. If the user denies it the package falls back to the system Documents UI automatically.
+
+---
+
+## PickedMovie
+
+```dart
+final movie = await OpenSubtitlesHasher.pickMovie();
+if (movie != null) {
+  movie.effectivePath; // pass this to computeHashResult - works on all platforms
+  movie.uri;           // Android content:// URI (null on other platforms)
+  movie.path;          // Filesystem path (iOS, macOS, Windows, Linux)
+  movie.name;          // Display name
+  movie.size;          // Bytes (if reported)
+  movie.duration;      // Duration (Android folder browser only)
+}
+```
+
+Always use `effectivePath` with `computeHashResult` - it picks `uri` on Android (zero-copy) or `path` elsewhere.
+
+---
+
+## API reference
+
+| Method | What |
+|--------|------|
+| `pickMovie({options})` | Pick a movie on any platform → `PickedMovie?` |
+| `pickAndHash({options})` | Pick + hash in one call → `({PickedMovie, HashResult})?` |
+| `computeHashResult(pathOrUri)` | Hash + size + `toApiMap()` |
+| `computeHash(pathOrUri)` | Hash string only |
+| `computeHashSync(path)` | Synchronous Dart hash (filesystem paths only) |
+| `computeFileHash(file)` | Hash from a `File` object |
+| `isValidHash(hash)` | True if 16 lowercase hex chars |
+| `isContentUri(path)` | True if `content://` URI |
+
+**Types:** `HashResult`, `PickedMovie`, `MoviePickerOptions`, `MoviePickerMode`, `InvalidFileException`, `MovieFilterException`.
+
+---
+
+## Error handling
+
+```dart
+try {
+  final picked = await OpenSubtitlesHasher.pickAndHash();
+} on MovieFilterException catch (e) {
+  // Android Documents mode: file failed your filters
+  print(e.code);    // TOO_SMALL, TOO_SHORT, etc.
+  print(e.message);
+} on InvalidFileException {
+  // file is smaller than 64 KB - cannot hash
+} on PlatformException {
+  // native Android error
+} on UnsupportedError {
+  // web (not supported)
+}
+```
+
+---
+
+## How the hash works
+
+OpenSubtitles identifies files with a tiny checksum:
+
+```
+hash = fileSize
+     + sum(first 64 KB as little-endian uint64)
+     + sum(last  64 KB as little-endian uint64)
+→ 16 lowercase hex digits
+```
+
+Only **128 KB** is read regardless of file size. Files under 64 KB raise `InvalidFileException`.
+
+---
+
+## Try the example
+
+```bash
+cd example
+flutter run
+```
+
+On Android: toggle folder browser, step min duration / min size, pick video types, then tap **Pick movie + hash**. On other platforms: tap the same button - the system file dialog opens.
+
+---
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).
