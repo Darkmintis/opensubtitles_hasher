@@ -1,8 +1,8 @@
 name: opensubtitles_hasher
 description: >-
-  Fast, cross-platform OpenSubtitles hashing. Reads only 128 KB regardless of 
-  file size. Uses native code on Android for zero-copy content URI access.
-version: 1.0.0
+  Fast OpenSubtitles hashing (128 KB only). Includes a built-in movie picker
+  for all platforms - Android folder browser, iOS, macOS, Windows, and Linux.
+version: 1.1.0
 homepage: https://github.com/Darkmintis/opensubtitles_hasher
 repository: https://github.com/Darkmintis/opensubtitles_hasher
 issue_tracker: https://github.com/Darkmintis/opensubtitles_hasher/issues
@@ -21,6 +21,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  file_picker: ^11.0.0
 
 dev_dependencies:
   flutter_test:

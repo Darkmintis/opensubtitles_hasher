@@ -3,82 +3,24 @@ import 'dart:typed_data';
 
 import 'models.dart';
 
-/// The size of each chunk read from the file (64 KB).
-const int _chunkSize = 65536;
+/// Chunk size for OpenSubtitles hashing (64 KB).
+const int kOpenSubtitlesChunkSize = 65536;
 
-/// The number of 64-bit integers in a 64 KB chunk.
-const int _int64Count = _chunkSize ~/ 8;
+const int _int64Count = kOpenSubtitlesChunkSize ~/ 8;
 
-/// Pure Dart implementation of the OpenSubtitles hashing algorithm.
+/// Pure Dart OpenSubtitles hash implementation (filesystem paths).
 ///
-/// This implementation works on all platforms with direct file path access.
-/// For modern Android with content:// URIs, use [OpenSubtitlesHasher] instead
-/// which automatically selects the best method.
-///
-/// The OpenSubtitles hash is defined as:
-/// ```
-/// hash = fileSize + sum(first 64KB as uint64 LE) + sum(last 64KB as uint64 LE)
-/// ```
-///
-/// Only 128 KB of data is ever read, regardless of file size — making this
-/// algorithm O(1) in memory and extremely fast even for 50GB+ files.
-///
-/// Example:
-/// ```dart
-/// final hash = await OpenSubtitlesHasherImpl.computeFileHash('/path/to/movie.mp4');
-/// print(hash); // e.g. "8e245d9679d31e12"
-/// ```
+/// Prefer [OpenSubtitlesHasher] for platform-aware hashing.
 class OpenSubtitlesHasherImpl {
   OpenSubtitlesHasherImpl._();
 
-  /// Computes the OpenSubtitles hash from a file [path].
-  ///
-  /// Throws a [FileSystemException] if the file does not exist or cannot
-  /// be read.
-  ///
-  /// Throws an [InvalidFileException] if the file is smaller than 128 KB
-  /// (the minimum required by the algorithm).
+  /// Async hash for a filesystem [path].
   static Future<String> computeHash(String path) async {
-    final file = File(path);
-
-    // ignore: avoid_slow_async_io
-    if (!await file.exists()) {
-      throw FileSystemException('File not found', path);
-    }
-
-    final raf = await file.open(mode: FileMode.read);
-
-    try {
-      final fileSize = await raf.length();
-
-      if (fileSize < _chunkSize) {
-        throw InvalidFileException(
-          'File is too small for OpenSubtitles hashing. '
-          'Minimum size is 64 KB, got $fileSize bytes.',
-          path,
-        );
-      }
-
-      await raf.setPosition(0);
-      final headBytes = await raf.read(_chunkSize);
-
-      await raf.setPosition(fileSize - _chunkSize);
-      final tailBytes = await raf.read(_chunkSize);
-
-      var hash = _toUint64(fileSize);
-      hash = _addUint64(hash, _sumChunk(headBytes));
-      hash = _addUint64(hash, _sumChunk(tailBytes));
-
-      return _toHex(hash);
-    } finally {
-      await raf.close();
-    }
+    final result = await computeHashResult(path);
+    return result.hash;
   }
 
-  /// Synchronous version of [computeHash].
-  ///
-  /// Prefer [computeHash] in async contexts. Use this only when you
-  /// absolutely cannot use async (e.g. during isolate startup).
+  /// Sync hash for a filesystem [path].
   static String computeHashSync(String path) {
     final file = File(path);
 
@@ -90,43 +32,26 @@ class OpenSubtitlesHasherImpl {
 
     try {
       final fileSize = raf.lengthSync();
-
-      if (fileSize < _chunkSize) {
-        throw InvalidFileException(
-          'File is too small for OpenSubtitles hashing. '
-          'Minimum size is 64 KB, got $fileSize bytes.',
-          path,
-        );
-      }
+      _ensureMinSize(fileSize, path);
 
       raf.setPositionSync(0);
-      final headBytes = raf.readSync(_chunkSize);
+      final headBytes = raf.readSync(kOpenSubtitlesChunkSize);
+      _validateChunk(headBytes, path);
 
-      raf.setPositionSync(fileSize - _chunkSize);
-      final tailBytes = raf.readSync(_chunkSize);
+      raf.setPositionSync(fileSize - kOpenSubtitlesChunkSize);
+      final tailBytes = raf.readSync(kOpenSubtitlesChunkSize);
+      _validateChunk(tailBytes, path);
 
-      var hash = _toUint64(fileSize);
-      hash = _addUint64(hash, _sumChunk(headBytes));
-      hash = _addUint64(hash, _sumChunk(tailBytes));
-
-      return _toHex(hash);
+      return _toHex(_computeHashValue(fileSize, headBytes, tailBytes));
     } finally {
       raf.closeSync();
     }
   }
 
-  /// Computes the OpenSubtitles hash from a [File] object.
-  ///
-  /// Convenience wrapper around [computeHash].
-  static Future<String> computeFileHash(File file) =>
-      computeHash(file.path);
+  /// Hash a [File] path via Dart.
+  static Future<String> computeFileHash(File file) => computeHash(file.path);
 
-  /// Computes the hash and also returns the file size.
-  ///
-  /// Some OpenSubtitles API calls require both the hash and byte size.
-  /// This avoids having to stat the file twice.
-  ///
-  /// Returns a [HashResult] containing both values.
+  /// Hash + size for OpenSubtitles API calls.
   static Future<HashResult> computeHashResult(String path) async {
     final file = File(path);
 
@@ -139,27 +64,18 @@ class OpenSubtitlesHasherImpl {
 
     try {
       final fileSize = await raf.length();
-
-      if (fileSize < _chunkSize) {
-        throw InvalidFileException(
-          'File is too small for OpenSubtitles hashing. '
-          'Minimum size is 64 KB, got $fileSize bytes.',
-          path,
-        );
-      }
+      _ensureMinSize(fileSize, path);
 
       await raf.setPosition(0);
-      final headBytes = await raf.read(_chunkSize);
+      final headBytes = await raf.read(kOpenSubtitlesChunkSize);
+      _validateChunk(headBytes, path);
 
-      await raf.setPosition(fileSize - _chunkSize);
-      final tailBytes = await raf.read(_chunkSize);
-
-      var hash = _toUint64(fileSize);
-      hash = _addUint64(hash, _sumChunk(headBytes));
-      hash = _addUint64(hash, _sumChunk(tailBytes));
+      await raf.setPosition(fileSize - kOpenSubtitlesChunkSize);
+      final tailBytes = await raf.read(kOpenSubtitlesChunkSize);
+      _validateChunk(tailBytes, path);
 
       return HashResult(
-        hash: _toHex(hash),
+        hash: _toHex(_computeHashValue(fileSize, headBytes, tailBytes)),
         fileSize: fileSize,
         filePath: path,
       );
@@ -168,18 +84,42 @@ class OpenSubtitlesHasherImpl {
     }
   }
 
-  /// Validates whether a hash string looks like a valid OpenSubtitles hash.
-  ///
-  /// A valid hash is exactly 16 lowercase hex characters.
+  /// Validates a 16-char lowercase hex OpenSubtitles hash.
   static bool isValidHash(String hash) {
     if (hash.length != 16) return false;
     return RegExp(r'^[0-9a-f]{16}$').hasMatch(hash);
   }
 
-  // ─────────────────────────── Internal helpers ────────────────────────────
+  static void _ensureMinSize(int fileSize, String path) {
+    if (fileSize < kOpenSubtitlesChunkSize) {
+      throw InvalidFileException(
+        'File is too small for OpenSubtitles hashing. '
+        'Minimum size is 64 KB, got $fileSize bytes.',
+        path,
+      );
+    }
+  }
 
-  /// Sums all 64-bit little-endian unsigned integers in [bytes].
-  /// Reads via ByteData to avoid platform precision issues.
+  static void _validateChunk(Uint8List bytes, String path) {
+    if (bytes.length != kOpenSubtitlesChunkSize) {
+      throw FileSystemException(
+        'Unexpected EOF while reading file chunk',
+        path,
+      );
+    }
+  }
+
+  static _Uint64 _computeHashValue(
+    int fileSize,
+    Uint8List headBytes,
+    Uint8List tailBytes,
+  ) {
+    var hash = _toUint64(fileSize);
+    hash = _addUint64(hash, _sumChunk(headBytes));
+    hash = _addUint64(hash, _sumChunk(tailBytes));
+    return hash;
+  }
+
   static _Uint64 _sumChunk(Uint8List bytes) {
     final bd = ByteData.sublistView(bytes);
     var sum = _Uint64.zero;
@@ -193,14 +133,12 @@ class OpenSubtitlesHasherImpl {
     return sum;
   }
 
-  /// Wraps a [int] into a [_Uint64] using two 32-bit halves.
   static _Uint64 _toUint64(int value) {
     final lo = value & 0xFFFFFFFF;
     final hi = (value >> 32) & 0xFFFFFFFF;
     return _Uint64(hi, lo);
   }
 
-  /// Adds two [_Uint64] values with unsigned overflow (mod 2^64).
   static _Uint64 _addUint64(_Uint64 a, _Uint64 b) {
     final loSum = a.lo + b.lo;
     final carry = loSum >> 32;
@@ -209,7 +147,6 @@ class OpenSubtitlesHasherImpl {
     return _Uint64(hi, lo);
   }
 
-  /// Converts a [_Uint64] to a zero-padded 16-character lowercase hex string.
   static String _toHex(_Uint64 v) {
     final hiHex = v.hi.toRadixString(16).padLeft(8, '0');
     final loHex = v.lo.toRadixString(16).padLeft(8, '0');
@@ -217,7 +154,6 @@ class OpenSubtitlesHasherImpl {
   }
 }
 
-/// Internal representation of an unsigned 64-bit integer as two 32-bit halves.
 class _Uint64 {
   final int hi;
   final int lo;

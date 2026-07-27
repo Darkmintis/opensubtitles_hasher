@@ -1,49 +1,123 @@
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
+
 import 'hasher.dart';
 import 'models.dart';
+import 'platform/cross_platform_picker.dart';
+import 'platform/hasher_channel.dart';
 
-/// Main entry point for OpenSubtitles hashing with automatic platform selection.
+/// OpenSubtitles hashing and movie picking for all platforms.
+///
+/// **Hashing**
+/// - Filesystem paths → pure Dart (all platforms)
+/// - Android `content://` URIs → native Kotlin (zero-copy)
+///
+/// **Picking**
+/// - Android → native folder browser (videos only, filters apply in query)
+/// - iOS / macOS / Windows / Linux → system file dialog via `file_picker`
+///
+/// Single API for everything:
+/// ```dart
+/// final picked = await OpenSubtitlesHasher.pickMovie();
+/// if (picked != null) {
+///   final result = await OpenSubtitlesHasher.computeHashResult(
+///     picked.effectivePath,
+///   );
+/// }
+/// ```
 class OpenSubtitlesHasher {
-  static const MethodChannel _nativeChannel = MethodChannel('opensubtitles_hasher');
-  
-  /// Computes hash from a file path or content URI.
-  /// 
-  /// Automatically selects the best method:
-  /// - Android + content:// URI → Native (no copy, fast)
-  /// - Everything else → Pure Dart (fast)
+  OpenSubtitlesHasher._();
+
+  /// Whether [pathOrUri] is an Android content URI.
+  static bool isContentUri(String pathOrUri) =>
+      pathOrUri.startsWith('content:');
+
+  /// Computes hash from a filesystem path or Android `content://` URI.
+  ///
+  /// Routes to native Kotlin on Android for content URIs; pure Dart elsewhere.
   static Future<HashResult> computeHashResult(String pathOrUri) async {
-    // Modern Android with content URI → Use native
-    if (!kIsWeb && Platform.isAndroid && pathOrUri.startsWith('content://')) {
-      try {
-        final result = await _nativeChannel.invokeMapMethod<String, dynamic>(
-          'computeHash',
-          {'uri': pathOrUri},
-        );
-        
-        if (result == null) {
-          throw Exception('Native hash computation failed');
-        }
-        
-        return HashResult(
-          hash: result['hash'] as String,
-          fileSize: result['size'] as int,
-          filePath: pathOrUri,
-        );
-      } catch (e) {
-        // Fallback to Dart if native fails
-        return await OpenSubtitlesHasherImpl.computeHashResult(pathOrUri);
-      }
+    if (!kIsWeb && Platform.isAndroid && isContentUri(pathOrUri)) {
+      return HasherChannel.computeHash(pathOrUri);
     }
-    
-    // Everything else → Use pure Dart
-    return await OpenSubtitlesHasherImpl.computeHashResult(pathOrUri);
+    return OpenSubtitlesHasherImpl.computeHashResult(pathOrUri);
   }
-  
-  /// Convenience method for just the hash string.
+
+  /// Convenience: hash string only.
   static Future<String> computeHash(String pathOrUri) async {
     final result = await computeHashResult(pathOrUri);
     return result.hash;
+  }
+
+  /// Synchronous hashing for filesystem paths (Dart only).
+  ///
+  /// Does not support Android `content://` URIs.
+  static String computeHashSync(String path) =>
+      OpenSubtitlesHasherImpl.computeHashSync(path);
+
+  /// Hashes a [File] via the Dart implementation.
+  static Future<String> computeFileHash(File file) =>
+      OpenSubtitlesHasherImpl.computeFileHash(file);
+
+  /// Returns true if [hash] is 16 lowercase hex characters.
+  static bool isValidHash(String hash) =>
+      OpenSubtitlesHasherImpl.isValidHash(hash);
+
+  /// Picks a movie on any platform and returns a [PickedMovie].
+  ///
+  /// - **Android** - folder browser (MediaStore, videos only). Duration, size,
+  ///   MIME, and color filters all apply. Falls back to system Documents UI if
+  ///   permission is denied.
+  /// - **iOS / macOS / Windows / Linux** - system file dialog filtered by
+  ///   video extension. Duration/size cannot be pre-filtered on these
+  ///   platforms; MIME-to-extension mapping applies.
+  ///
+  /// Returns `null` if the user cancels.
+  ///
+  /// Throws [MovieFilterException] when an Android Documents-mode pick fails
+  /// post-pick size/duration filters.
+  ///
+  /// [options] defaults to [MoviePickerOptions.defaults] (all videos, no
+  /// size/duration limits). Use [MoviePickerOptions.copyWith] to customise.
+  ///
+  /// ```dart
+  /// final picked = await OpenSubtitlesHasher.pickMovie(
+  ///   options: MoviePickerOptions.defaults.copyWith(
+  ///     minDuration: Duration(minutes: 30), // Android only - hides short clips
+  ///     toolbarColorHex: '#F5A623',
+  ///   ),
+  /// );
+  /// if (picked != null) {
+  ///   final hash = await OpenSubtitlesHasher.computeHashResult(
+  ///     picked.effectivePath,
+  ///   );
+  /// }
+  /// ```
+  static Future<PickedMovie?> pickMovie({
+    MoviePickerOptions options = MoviePickerOptions.defaults,
+  }) async {
+    if (kIsWeb) {
+      throw UnsupportedError('pickMovie() is not supported on web.');
+    }
+
+    if (Platform.isAndroid) {
+      return HasherChannel.pickMovie(options);
+    }
+
+    // iOS, macOS, Windows, Linux - system file dialog.
+    return CrossPlatformPicker.pickMovie(options);
+  }
+
+  /// Picks a movie and computes its hash in one call (all platforms).
+  ///
+  /// Returns `null` if the user cancels. Same rules as [pickMovie].
+  static Future<({PickedMovie movie, HashResult hash})?> pickAndHash({
+    MoviePickerOptions options = MoviePickerOptions.defaults,
+  }) async {
+    final movie = await pickMovie(options: options);
+    if (movie == null) return null;
+
+    final hash = await computeHashResult(movie.effectivePath);
+    return (movie: movie, hash: hash);
   }
 }
