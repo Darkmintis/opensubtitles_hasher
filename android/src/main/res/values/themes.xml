@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.OpenSubtitlesHasher.MoviePicker" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#0B6E4F</item>
+        <item name="colorPrimaryVariant">#08563E</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="android:statusBarColor">#08563E</item>
+        <item name="android:navigationBarColor">#121212</item>
+    </style>
+</resources>
