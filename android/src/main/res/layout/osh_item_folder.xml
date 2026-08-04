@@ -4,26 +4,34 @@
     android:layout_height="wrap_content"
     android:background="?attr/selectableItemBackground"
     android:gravity="center_vertical"
-    android:minHeight="64dp"
+    android:minHeight="68dp"
     android:orientation="horizontal"
     android:paddingStart="16dp"
     android:paddingTop="10dp"
     android:paddingEnd="16dp"
     android:paddingBottom="10dp">
 
-    <ImageView
-        android:id="@+id/osh_folder_icon"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:contentDescription="@null"
-        android:padding="6dp"
-        android:src="@android:drawable/ic_menu_agenda"
-        android:tint="?attr/colorPrimary" />
+    <FrameLayout
+        android:id="@+id/osh_folder_icon_bg"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:background="@drawable/osh_bg_folder_icon">
+
+        <ImageView
+            android:id="@+id/osh_folder_icon"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_gravity="center"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no"
+            android:src="@drawable/osh_ic_folder"
+            android:tint="?attr/colorPrimary" />
+    </FrameLayout>
 
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
+        android:layout_marginStart="14dp"
         android:layout_weight="1"
         android:orientation="vertical">
 
@@ -40,7 +48,17 @@
             android:id="@+id/osh_folder_count"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
             android:textAppearance="?attr/textAppearanceBody2"
             android:textColor="?android:attr/textColorSecondary" />
     </LinearLayout>
+
+    <ImageView
+        android:layout_width="18dp"
+        android:layout_height="18dp"
+        android:contentDescription="@null"
+        android:importantForAccessibility="no"
+        android:src="@drawable/osh_ic_chevron_right"
+        android:tint="?android:attr/textColorSecondary"
+        android:alpha="0.45" />
 </LinearLayout>
