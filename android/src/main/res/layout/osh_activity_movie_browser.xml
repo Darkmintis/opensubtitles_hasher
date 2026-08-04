@@ -1,15 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/osh_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="?android:attr/colorBackground">
+    android:background="?android:attr/colorBackground"
+    android:fitsSystemWindows="false">
+
+    <!-- Colored strip behind the status bar / cutout (edge-to-edge). -->
+    <View
+        android:id="@+id/osh_status_scrim"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:background="?attr/colorPrimary" />
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/osh_toolbar"
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
+        android:layout_height="wrap_content"
+        android:minHeight="?attr/actionBarSize"
         android:background="?attr/colorPrimary"
         android:theme="@style/ThemeOverlay.MaterialComponents.Dark.ActionBar"
         app:navigationIcon="?attr/homeAsUpIndicator"
@@ -17,6 +27,7 @@
         app:titleTextColor="@android:color/white" />
 
     <FrameLayout
+        android:id="@+id/osh_content"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
@@ -36,7 +47,7 @@
             android:layout_gravity="center"
             android:padding="24dp"
             android:gravity="center"
-            android:textAppearance="?attr/textAppearanceBody1"
+            android:textAppearance="?attr/textAppearanceBodyLarge"
             android:visibility="gone" />
 
         <ProgressBar

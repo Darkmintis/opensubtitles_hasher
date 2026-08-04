@@ -17,7 +17,14 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.graphics.ColorUtils
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
@@ -33,6 +40,8 @@ import kotlin.math.roundToInt
 /**
  * Folder browser: folders that contain matching videos → videos only.
  * Images and non-video files never appear (MediaStore.Video only).
+ *
+ * Draws edge-to-edge on Android 15+ and pads system bars via WindowInsets.
  */
 class MovieBrowserActivity : AppCompatActivity() {
 
@@ -68,7 +77,10 @@ class MovieBrowserActivity : AppCompatActivity() {
         }
     }
 
+    private lateinit var root: View
+    private lateinit var statusScrim: View
     private lateinit var toolbar: MaterialToolbar
+    private lateinit var content: View
     private lateinit var list: RecyclerView
     private lateinit var empty: TextView
     private lateinit var loading: ProgressBar
@@ -80,12 +92,18 @@ class MovieBrowserActivity : AppCompatActivity() {
     private val main = Handler(Looper.getMainLooper())
 
     private var showingFolders = true
+    private var toolbarBaseColor: Int? = null
+    private var accentColor: Int = Color.parseColor("#0B6E4F")
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.osh_activity_movie_browser)
 
+        root = findViewById(R.id.osh_root)
+        statusScrim = findViewById(R.id.osh_status_scrim)
         toolbar = findViewById(R.id.osh_toolbar)
+        content = findViewById(R.id.osh_content)
         list = findViewById(R.id.osh_list)
         empty = findViewById(R.id.osh_empty)
         loading = findViewById(R.id.osh_loading)
@@ -94,11 +112,12 @@ class MovieBrowserActivity : AppCompatActivity() {
         repository = MediaStoreVideoRepository(this)
         options = optionsFromIntent()
         applyCustomColors()
+        applyWindowInsets()
 
         toolbar.setNavigationOnClickListener { navigateBack() }
         onBackPressedDispatcher.addCallback(
             this,
-            object : androidx.activity.OnBackPressedCallback(true) {
+            object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
                     navigateBack()
                 }
@@ -106,6 +125,34 @@ class MovieBrowserActivity : AppCompatActivity() {
         )
 
         showFolders()
+    }
+
+    private fun applyWindowInsets() {
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
+
+            val top = maxOf(systemBars.top, cutout.top)
+            val bottom = maxOf(systemBars.bottom, cutout.bottom)
+            val left = maxOf(systemBars.left, cutout.left)
+            val right = maxOf(systemBars.right, cutout.right)
+
+            statusScrim.layoutParams = statusScrim.layoutParams.apply { height = top }
+            statusScrim.updatePadding(left = left, right = right)
+            toolbar.updatePadding(left = left, top = 0, right = right, bottom = 0)
+            content.updatePadding(left = left, top = 0, right = right, bottom = bottom)
+
+            val listBottomPad = (4 * resources.displayMetrics.density).roundToInt()
+            list.setPadding(
+                list.paddingLeft,
+                list.paddingTop,
+                list.paddingRight,
+                listBottomPad,
+            )
+
+            insets
+        }
+        ViewCompat.requestApplyInsets(root)
     }
 
     private fun navigateBack() {
@@ -140,15 +187,26 @@ class MovieBrowserActivity : AppCompatActivity() {
         if (hasExtra(key)) getLongExtra(key, -1L).takeIf { it >= 0L } else null
 
     private fun applyCustomColors() {
-        parseColorOrNull(options.toolbarColorHex)?.let { toolbarColor ->
-            toolbar.setBackgroundColor(toolbarColor)
+        val defaultPrimary = Color.parseColor("#0B6E4F")
+        val toolbarColor = parseColorOrNull(options.toolbarColorHex) ?: defaultPrimary
+        val statusColor = parseColorOrNull(options.statusBarColorHex) ?: toolbarColor
+        val onToolbar = parseColorOrNull(options.toolbarOnColorHex)
+
+        toolbarBaseColor = toolbarColor
+        accentColor = toolbarColor
+
+        statusScrim.setBackgroundColor(statusColor)
+        toolbar.setBackgroundColor(toolbarColor)
+
+        if (onToolbar != null) {
+            toolbar.setTitleTextColor(onToolbar)
+            toolbar.navigationIcon?.setTint(onToolbar)
         }
-        parseColorOrNull(options.toolbarOnColorHex)?.let { onColor ->
-            toolbar.setTitleTextColor(onColor)
-            toolbar.navigationIcon?.setTint(onColor)
-        }
-        parseColorOrNull(options.statusBarColorHex)?.let { statusColor ->
-            window.statusBarColor = statusColor
+
+        val lightStatusIcons = ColorUtils.calculateLuminance(statusColor) >= 0.5
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = lightStatusIcons
+            isAppearanceLightNavigationBars = false
         }
     }
 
@@ -180,7 +238,7 @@ class MovieBrowserActivity : AppCompatActivity() {
                     empty.text = getString(R.string.osh_empty_folders)
                 } else {
                     empty.visibility = View.GONE
-                    list.adapter = FolderAdapter(folders) { folder ->
+                    list.adapter = FolderAdapter(folders, accentColor) { folder ->
                         showVideos(folder)
                     }
                 }
@@ -221,7 +279,7 @@ class MovieBrowserActivity : AppCompatActivity() {
             putExtra(EXTRA_RESULT_NAME, video.name)
             putExtra(EXTRA_RESULT_SIZE, video.sizeBytes)
             putExtra(EXTRA_RESULT_DURATION_MS, video.durationMs)
-            data = video.uri
+            this.data = video.uri
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         setResult(Activity.RESULT_OK, data)
@@ -237,6 +295,7 @@ class MovieBrowserActivity : AppCompatActivity() {
 
     private class FolderAdapter(
         private val items: List<VideoFolder>,
+        private val accentColor: Int,
         private val onClick: (VideoFolder) -> Unit,
     ) : RecyclerView.Adapter<FolderAdapter.Holder>() {
 
@@ -255,10 +314,16 @@ class MovieBrowserActivity : AppCompatActivity() {
                 R.string.osh_video_count,
                 item.videoCount,
             )
+            holder.icon.setColorFilter(accentColor)
+            holder.iconBackground.background?.mutate()?.setTint(
+                ColorUtils.setAlphaComponent(accentColor, 0x26),
+            )
             holder.itemView.setOnClickListener { onClick(item) }
         }
 
         class Holder(view: View) : RecyclerView.ViewHolder(view) {
+            val iconBackground: View = view.findViewById(R.id.osh_folder_icon_bg)
+            val icon: ImageView = view.findViewById(R.id.osh_folder_icon)
             val name: TextView = view.findViewById(R.id.osh_folder_name)
             val count: TextView = view.findViewById(R.id.osh_folder_count)
         }
