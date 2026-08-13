@@ -11,6 +11,3 @@ jobs:
       id-token: write # Required for authentication using OIDC
       contents: read
     uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
-    # Package lives at repository root; uncomment if you move it into a subfolder:
-    # with:
-    #   working-directory: path/to/package/within/repository
