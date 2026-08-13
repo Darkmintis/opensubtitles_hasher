@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.3] - 2026-08-13
+
+### Fixed
+
+- README install example updated to `^1.1.3`.
+
 ## [1.1.2] - 2026-08-13
 
 ### Fixed

@@ -16,7 +16,7 @@ Fast OpenSubtitles hashing and movie picking for Flutter - all platforms, one AP
 
 ```yaml
 dependencies:
-  opensubtitles_hasher: ^1.1.1
+  opensubtitles_hasher: ^1.1.3
 ```
 
 ```bash
