@@ -2,7 +2,7 @@ name: opensubtitles_hasher
 description: >-
   Fast OpenSubtitles hashing (128 KB only). Includes a built-in movie picker
   for all platforms - Android folder browser, iOS, macOS, Windows, and Linux.
-version: 1.1.1
+version: 1.1.2
 homepage: https://github.com/Darkmintis/opensubtitles_hasher
 repository: https://github.com/Darkmintis/opensubtitles_hasher
 issue_tracker: https://github.com/Darkmintis/opensubtitles_hasher/issues
@@ -34,11 +34,11 @@ flutter:
       android:
         package: com.opensubtitles.hasher
         pluginClass: OpenSubtitlesHasherPlugin
-     # ios:
-     #   pluginClass: OpenSubtitlesHasherPlugin
-     # linux:
-     #   dartPluginClass: OpenSubtitlesHasherLinux
-     # macos:
-     #   dartPluginClass: OpenSubtitlesHasherMacOS
-     # windows:
-     #   dartPluginClass: OpenSubtitlesHasherWindows
+      ios:
+        dartPluginClass: OpenSubtitlesHasherDartPlugin
+      linux:
+        dartPluginClass: OpenSubtitlesHasherDartPlugin
+      macos:
+        dartPluginClass: OpenSubtitlesHasherDartPlugin
+      windows:
+        dartPluginClass: OpenSubtitlesHasherDartPlugin

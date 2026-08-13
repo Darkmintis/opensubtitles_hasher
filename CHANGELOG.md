@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.2] - 2026-08-13
+
+### Fixed
+
+- Declared iOS, macOS, Windows, and Linux in `pubspec.yaml` via
+  `dartPluginClass` so pub.dev lists all supported platforms (not Android only).
+  Runtime behavior was already cross-platform; this is a metadata fix.
+
 ## [1.1.1] - 2026-08-04
 
 ### Fixed
