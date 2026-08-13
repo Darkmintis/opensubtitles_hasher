@@ -6,7 +6,8 @@ import 'package:opensubtitles_hasher/opensubtitles_hasher.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  const filePickerChannel = MethodChannel('miguelruivo.flutter.plugins.filepicker');
+  const filePickerChannel =
+      MethodChannel('miguelruivo.flutter.plugins.filepicker');
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
       .setMockMethodCallHandler(filePickerChannel, (call) async => null);
 
@@ -118,7 +119,8 @@ void main() {
         );
       });
 
-      test('throws InvalidFileException for files smaller than 64 KB', () async {
+      test('throws InvalidFileException for files smaller than 64 KB',
+          () async {
         final smallFile = File('${tempDir.path}/small.mp4');
         await smallFile.writeAsBytes(List.filled(1024, 0));
 
@@ -159,7 +161,8 @@ void main() {
         expect(picked, isNull);
       }, skip: Platform.isAndroid ? 'Android uses native channel' : false);
 
-      test('pickAndHash returns null on non-Android when user cancels', () async {
+      test('pickAndHash returns null on non-Android when user cancels',
+          () async {
         final picked = await OpenSubtitlesHasher.pickAndHash();
         expect(picked, isNull);
       }, skip: Platform.isAndroid ? 'Android uses native channel' : false);

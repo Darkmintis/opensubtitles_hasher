@@ -91,7 +91,7 @@ class MoviePickerOptions {
     this.toolbarColorHex,
     this.toolbarOnColorHex,
     this.statusBarColorHex,
-  }) : assert(
+  })  : assert(
           minSizeBytes == null || minSizeBytes >= 0,
           'minSizeBytes must be >= 0',
         ),
@@ -146,14 +146,13 @@ class MoviePickerOptions {
           clearMinSizeBytes ? null : (minSizeBytes ?? this.minSizeBytes),
       maxSizeBytes:
           clearMaxSizeBytes ? null : (maxSizeBytes ?? this.maxSizeBytes),
-      minDuration:
-          clearMinDuration ? null : (minDuration ?? this.minDuration),
-      maxDuration:
-          clearMaxDuration ? null : (maxDuration ?? this.maxDuration),
+      minDuration: clearMinDuration ? null : (minDuration ?? this.minDuration),
+      maxDuration: clearMaxDuration ? null : (maxDuration ?? this.maxDuration),
       takePersistablePermission:
           takePersistablePermission ?? this.takePersistablePermission,
-      toolbarColorHex:
-          clearToolbarColorHex ? null : (toolbarColorHex ?? this.toolbarColorHex),
+      toolbarColorHex: clearToolbarColorHex
+          ? null
+          : (toolbarColorHex ?? this.toolbarColorHex),
       toolbarOnColorHex: clearToolbarOnColorHex
           ? null
           : (toolbarOnColorHex ?? this.toolbarOnColorHex),
