@@ -18,4 +18,5 @@ flutter run
 
 **Other platforms**
 
-- Enter a filesystem path and tap **Compute hash**
+- Use **Pick movie + hash** to select a video with the system file dialog
+- Enter a filesystem path and tap **Compute hash** to hash a known path

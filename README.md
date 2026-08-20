@@ -16,7 +16,7 @@ Fast OpenSubtitles hashing and movie picking for Flutter - all platforms, one AP
 
 ```yaml
 dependencies:
-  opensubtitles_hasher: ^1.1.3
+  opensubtitles_hasher: ^1.1.4
 ```
 
 ```bash
@@ -71,7 +71,9 @@ print(result.toApiMap()); // ready for the OpenSubtitles API
 
 On Android, the folder browser shows **only folders that contain matching videos**. Images and documents never appear. Filters (duration, size, MIME) are applied in the MediaStore query - short clips and small files are hidden before the UI renders.
 
-On other platforms the system file dialog filters by video extension. Duration and size cannot be pre-filtered on those platforms.
+On other platforms the system file dialog filters by video extension. Size
+limits are checked immediately after selection. Duration limits cannot be
+checked because system file dialogs do not provide media duration metadata.
 
 ---
 
@@ -89,6 +91,7 @@ await OpenSubtitlesHasher.pickMovie(
     toolbarColorHex: '#1F6FEB',           // optional toolbar colour
     toolbarOnColorHex: '#FFFFFF',         // toolbar text / icon colour
     statusBarColorHex: '#174EA6',         // status bar colour
+    accentColorHex: '#58A6FF',            // folder icons / highlights
   ),
 );
 ```
@@ -102,6 +105,7 @@ await OpenSubtitlesHasher.pickMovie(
 | `toolbarColorHex` | Folder browser toolbar colour (`#RRGGBB` / `#AARRGGBB`) |
 | `toolbarOnColorHex` | Toolbar title + icon colour |
 | `statusBarColorHex` | Status bar colour for the picker screen |
+| `accentColorHex` | Folder icon / highlight colour (defaults to toolbar colour) |
 | `takePersistablePermission` | Keep URI readable later (Documents mode only) |
 
 The folder browser requests video read permission. If the user denies it the package falls back to the system Documents UI automatically.
@@ -124,6 +128,8 @@ if (movie != null) {
 
 Always use `effectivePath` with `computeHashResult` - it picks `uri` on Android (zero-copy) or `path` elsewhere.
 
+`picked.searchTitle` is a cleaned title from the filename (`The.Matrix.1999.1080p.mkv` → `The Matrix`). Use it for an OpenSubtitles text search when the hash has no match. Episode files also expose `picked.parsedName.season` and `episode`.
+
 ---
 
 ## API reference
@@ -138,8 +144,9 @@ Always use `effectivePath` with `computeHashResult` - it picks `uri` on Android 
 | `computeFileHash(file)` | Hash from a `File` object |
 | `isValidHash(hash)` | True if 16 lowercase hex chars |
 | `isContentUri(path)` | True if `content://` URI |
+| `parseFileName(name)` | Title, year, season, episode from a filename |
 
-**Types:** `HashResult`, `PickedMovie`, `MoviePickerOptions`, `MoviePickerMode`, `InvalidFileException`, `MovieFilterException`.
+**Types:** `HashResult`, `PickedMovie`, `ParsedVideoName`, `MoviePickerOptions`, `MoviePickerMode`, `InvalidFileException`, `MovieFilterException`.
 
 ---
 
@@ -149,7 +156,7 @@ Always use `effectivePath` with `computeHashResult` - it picks `uri` on Android 
 try {
   final picked = await OpenSubtitlesHasher.pickAndHash();
 } on MovieFilterException catch (e) {
-  // Android Documents mode: file failed your filters
+  // Picked file failed a size/duration filter
   print(e.code);    // TOO_SMALL, TOO_SHORT, etc.
   print(e.message);
 } on InvalidFileException {

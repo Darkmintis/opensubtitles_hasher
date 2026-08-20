@@ -60,7 +60,7 @@ class _DemoPageState extends State<DemoPage> {
     'mp4': 'video/mp4',
     'mkv': 'video/x-matroska',
     'webm': 'video/webm',
-    'avi': 'video/avi',
+    'avi': 'video/x-msvideo',
   };
 
   @override
@@ -267,9 +267,8 @@ class _DemoPageState extends State<DemoPage> {
             const SizedBox(height: 8),
             _StepperRow(
               label: 'Min duration',
-              valueLabel: _minDurationMinutes == 0
-                  ? 'Off'
-                  : '$_minDurationMinutes min',
+              valueLabel:
+                  _minDurationMinutes == 0 ? 'Off' : '$_minDurationMinutes min',
               onDecrement: () => _nudgeDuration(-15),
               onIncrement: () => _nudgeDuration(15),
             ),
