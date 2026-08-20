@@ -37,6 +37,7 @@ class OpenSubtitlesHasher {
   ///
   /// Routes to native Kotlin on Android for content URIs; pure Dart elsewhere.
   static Future<HashResult> computeHashResult(String pathOrUri) async {
+    _ensureHashingSupported();
     if (!kIsWeb && Platform.isAndroid && isContentUri(pathOrUri)) {
       return HasherChannel.computeHash(pathOrUri);
     }
@@ -52,16 +53,24 @@ class OpenSubtitlesHasher {
   /// Synchronous hashing for filesystem paths (Dart only).
   ///
   /// Does not support Android `content://` URIs.
-  static String computeHashSync(String path) =>
-      OpenSubtitlesHasherImpl.computeHashSync(path);
+  static String computeHashSync(String path) {
+    _ensureHashingSupported();
+    return OpenSubtitlesHasherImpl.computeHashSync(path);
+  }
 
   /// Hashes a [File] via the Dart implementation.
-  static Future<String> computeFileHash(File file) =>
-      OpenSubtitlesHasherImpl.computeFileHash(file);
+  static Future<String> computeFileHash(File file) {
+    _ensureHashingSupported();
+    return OpenSubtitlesHasherImpl.computeFileHash(file);
+  }
 
   /// Returns true if [hash] is 16 lowercase hex characters.
   static bool isValidHash(String hash) =>
       OpenSubtitlesHasherImpl.isValidHash(hash);
+
+  /// Parses a video filename into a search title, year, and SxxExx metadata.
+  static ParsedVideoName parseFileName(String fileName) =>
+      VideoFileNameParser.parse(fileName);
 
   /// Picks a movie on any platform and returns a [PickedMovie].
   ///
@@ -69,8 +78,8 @@ class OpenSubtitlesHasher {
   ///   MIME, and color filters all apply. Falls back to system Documents UI if
   ///   permission is denied.
   /// - **iOS / macOS / Windows / Linux** - system file dialog filtered by
-  ///   video extension. Duration/size cannot be pre-filtered on these
-  ///   platforms; MIME-to-extension mapping applies.
+  ///   video extension. Size limits are checked after selection; duration
+  ///   limits cannot be checked because duration metadata is unavailable.
   ///
   /// Returns `null` if the user cancels.
   ///
@@ -96,6 +105,7 @@ class OpenSubtitlesHasher {
   static Future<PickedMovie?> pickMovie({
     MoviePickerOptions options = MoviePickerOptions.defaults,
   }) async {
+    _validateOptions(options);
     if (kIsWeb) {
       throw UnsupportedError('pickMovie() is not supported on web.');
     }
@@ -119,5 +129,42 @@ class OpenSubtitlesHasher {
 
     final hash = await computeHashResult(movie.effectivePath);
     return (movie: movie, hash: hash);
+  }
+
+  static void _ensureHashingSupported() {
+    if (kIsWeb) {
+      throw UnsupportedError(
+        'OpenSubtitles hashing is not supported on web because browsers do '
+        'not provide random access to filesystem paths.',
+      );
+    }
+  }
+
+  static void _validateOptions(MoviePickerOptions options) {
+    final minDuration = options.minDuration;
+    final maxDuration = options.maxDuration;
+
+    if (minDuration != null && minDuration.isNegative) {
+      throw ArgumentError.value(
+        minDuration,
+        'options.minDuration',
+        'must be greater than or equal to zero',
+      );
+    }
+    if (maxDuration != null && maxDuration.isNegative) {
+      throw ArgumentError.value(
+        maxDuration,
+        'options.maxDuration',
+        'must be greater than or equal to zero',
+      );
+    }
+    if (minDuration != null &&
+        maxDuration != null &&
+        minDuration > maxDuration) {
+      throw ArgumentError(
+        'options.minDuration must be less than or equal to '
+        'options.maxDuration',
+      );
+    }
   }
 }
