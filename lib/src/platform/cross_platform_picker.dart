@@ -7,7 +7,7 @@ import '../models.dart';
 /// Picks a video file using the system file dialog on non-Android platforms.
 ///
 /// Filters by extension derived from [MoviePickerOptions.mimeTypes].
-/// Size filters are not enforceable pre-pick on any platform.
+/// Size filters are checked after the user picks a file.
 /// Duration filters are not enforceable pre-pick on any platform.
 class CrossPlatformPicker {
   CrossPlatformPicker._();
@@ -33,12 +33,29 @@ class CrossPlatformPicker {
     final path = file.path;
     if (path == null || path.trim().isEmpty) return null;
 
-    if (!File(path).existsSync()) return null;
+    final pickedFile = File(path);
+    if (!pickedFile.existsSync()) return null;
+
+    final size = await pickedFile.length();
+    if (options.minSizeBytes case final minSize? when size < minSize) {
+      throw MovieFilterException(
+        code: 'TOO_SMALL',
+        message: 'Selected file is smaller than $minSize bytes',
+        uri: path,
+      );
+    }
+    if (options.maxSizeBytes case final maxSize? when size > maxSize) {
+      throw MovieFilterException(
+        code: 'TOO_LARGE',
+        message: 'Selected file is larger than $maxSize bytes',
+        uri: path,
+      );
+    }
 
     return PickedMovie(
       path: path,
       name: file.name,
-      size: file.size > 0 ? file.size : null,
+      size: size,
     );
   }
 
@@ -64,6 +81,7 @@ class CrossPlatformPicker {
     const map = {
       'video/mp4': 'mp4',
       'video/x-matroska': 'mkv',
+      'video/avi': 'avi',
       'video/x-msvideo': 'avi',
       'video/quicktime': 'mov',
       'video/x-ms-wmv': 'wmv',

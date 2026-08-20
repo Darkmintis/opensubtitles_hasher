@@ -13,7 +13,7 @@ class InvalidFileException implements Exception {
   String toString() => 'InvalidFileException: $message (path: $path)';
 }
 
-/// Thrown when a picked Android file fails [MoviePickerOptions] filters.
+/// Thrown when a picked file fails [MoviePickerOptions] filters.
 ///
 /// The system picker cannot hide short/small files up front; this is raised
 /// after selection when size or duration does not match the options.
@@ -25,7 +25,7 @@ class MovieFilterException implements Exception {
   /// Human-readable description.
   final String message;
 
-  /// URI that was rejected, if known.
+  /// URI or filesystem path that was rejected, if known.
   final String? uri;
 
   /// Creates a filter rejection.
