@@ -14,7 +14,7 @@ enum MoviePickerMode {
   systemDocuments,
 }
 
-/// Customizable options for the native Android movie picker.
+/// Customizable options for the cross-platform movie picker.
 ///
 /// Everything is optional. Defaults: [MoviePickerMode.mediaStore], all
 /// videos (`video/*`), no size or duration limits. Use [copyWith] to
@@ -79,6 +79,10 @@ class MoviePickerOptions {
   /// Format: `#RRGGBB` or `#AARRGGBB`.
   final String? statusBarColorHex;
 
+  /// Optional accent color for folder icons and highlights in the Android
+  /// folder browser UI. Format: `#RRGGBB` or `#AARRGGBB`.
+  final String? accentColorHex;
+
   /// Creates picker options. Omit fields to keep package defaults.
   const MoviePickerOptions({
     this.mode = MoviePickerMode.mediaStore,
@@ -91,6 +95,7 @@ class MoviePickerOptions {
     this.toolbarColorHex,
     this.toolbarOnColorHex,
     this.statusBarColorHex,
+    this.accentColorHex,
   })  : assert(
           minSizeBytes == null || minSizeBytes >= 0,
           'minSizeBytes must be >= 0',
@@ -131,6 +136,7 @@ class MoviePickerOptions {
     String? toolbarColorHex,
     String? toolbarOnColorHex,
     String? statusBarColorHex,
+    String? accentColorHex,
     bool clearMinSizeBytes = false,
     bool clearMaxSizeBytes = false,
     bool clearMinDuration = false,
@@ -138,6 +144,7 @@ class MoviePickerOptions {
     bool clearToolbarColorHex = false,
     bool clearToolbarOnColorHex = false,
     bool clearStatusBarColorHex = false,
+    bool clearAccentColorHex = false,
   }) {
     return MoviePickerOptions(
       mode: mode ?? this.mode,
@@ -159,6 +166,9 @@ class MoviePickerOptions {
       statusBarColorHex: clearStatusBarColorHex
           ? null
           : (statusBarColorHex ?? this.statusBarColorHex),
+      accentColorHex: clearAccentColorHex
+          ? null
+          : (accentColorHex ?? this.accentColorHex),
     );
   }
 
@@ -176,5 +186,6 @@ class MoviePickerOptions {
         'toolbarColorHex': toolbarColorHex,
         'toolbarOnColorHex': toolbarOnColorHex,
         'statusBarColorHex': statusBarColorHex,
+        'accentColorHex': accentColorHex,
       };
 }

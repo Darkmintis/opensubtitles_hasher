@@ -23,6 +23,7 @@ internal data class MoviePickerOptions(
     val toolbarColorHex: String? = null,
     val toolbarOnColorHex: String? = null,
     val statusBarColorHex: String? = null,
+    val accentColorHex: String? = null,
 ) {
     val hasDurationFilter: Boolean
         get() = minDurationMs != null || maxDurationMs != null
@@ -58,6 +59,7 @@ internal data class MoviePickerOptions(
                 toolbarColorHex = args["toolbarColorHex"] as? String,
                 toolbarOnColorHex = args["toolbarOnColorHex"] as? String,
                 statusBarColorHex = args["statusBarColorHex"] as? String,
+                accentColorHex = args["accentColorHex"] as? String,
             )
         }
     }
