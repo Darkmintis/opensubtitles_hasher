@@ -2,6 +2,34 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.4] - 2026-08-20
+
+### Added
+
+- Post-pick minimum and maximum file-size validation on iOS, macOS, Windows,
+  and Linux, matching Android Documents-mode behavior.
+- Value equality and `hashCode` for `PickedMovie`.
+- Duration range validation for `MoviePickerOptions`.
+- `VideoFileNameParser` / `OpenSubtitlesHasher.parseFileName()` to extract a
+  search title, year, and SxxExx from a video filename.
+- `PickedMovie.searchTitle`, `displayName`, and `parsedName` for title fallback
+  search when a hash does not match.
+- Optional `accentColorHex` on `MoviePickerOptions` for Android folder-icon
+  and highlight color (host apps can theme the picker without changing package
+  defaults).
+- Looping marquee titles in the Android folder browser when a video or folder
+  name is wider than the list row.
+
+### Fixed
+
+- AVI MIME aliases now work consistently in the Dart picker, example app, and
+  Android MediaStore folder browser.
+- Hashing APIs now report a clear `UnsupportedError` on web.
+
+### Changed
+
+- CI now formats, analyzes, and tests the example app as well as the package.
+
 ## [1.1.3] - 2026-08-13
 
 ### Fixed

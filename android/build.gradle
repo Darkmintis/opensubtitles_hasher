@@ -1,5 +1,5 @@
 group 'com.opensubtitles.hasher'
-version '1.1.1'
+version '1.1.4'
 
 buildscript {
     repositories {
