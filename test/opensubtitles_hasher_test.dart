@@ -16,6 +16,8 @@ void main() {
 
     setUp(() async {
       tempDir = await Directory.systemTemp.createTemp('oshash_test_');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(filePickerChannel, (call) async => null);
     });
 
     tearDown(() async {
@@ -166,6 +168,85 @@ void main() {
         final picked = await OpenSubtitlesHasher.pickAndHash();
         expect(picked, isNull);
       }, skip: Platform.isAndroid ? 'Android uses native channel' : false);
+
+      test('returns the actual file size and maps AVI MIME aliases', () async {
+        final file = await _createZeroFile(tempDir, sizeInKB: 128);
+        MethodCall? capturedCall;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(filePickerChannel, (call) async {
+          capturedCall = call;
+          return [
+            {
+              'path': file.path,
+              'name': 'movie.avi',
+              'size': 1,
+              'bytes': null,
+            },
+          ];
+        });
+
+        final picked = await OpenSubtitlesHasher.pickMovie(
+          options: const MoviePickerOptions(mimeTypes: ['video/avi']),
+        );
+
+        expect(picked?.size, 128 * 1024);
+        expect(
+          (capturedCall?.arguments as Map)['allowedExtensions'],
+          ['avi'],
+        );
+      }, skip: Platform.isAndroid ? 'Android uses native channel' : false);
+
+      test('rejects a picked file below the minimum size', () async {
+        final file = await _createZeroFile(tempDir, sizeInKB: 64);
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(filePickerChannel, (call) async {
+          return [
+            {
+              'path': file.path,
+              'name': 'small.mp4',
+              'size': await file.length(),
+              'bytes': null,
+            },
+          ];
+        });
+
+        expect(
+          () => OpenSubtitlesHasher.pickMovie(
+            options: const MoviePickerOptions(minSizeBytes: 128 * 1024),
+          ),
+          throwsA(
+            isA<MovieFilterException>()
+                .having((error) => error.code, 'code', 'TOO_SMALL')
+                .having((error) => error.uri, 'path', file.path),
+          ),
+        );
+      }, skip: Platform.isAndroid ? 'Android uses native channel' : false);
+
+      test('rejects a picked file above the maximum size', () async {
+        final file = await _createZeroFile(tempDir, sizeInKB: 128);
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(filePickerChannel, (call) async {
+          return [
+            {
+              'path': file.path,
+              'name': 'large.mp4',
+              'size': await file.length(),
+              'bytes': null,
+            },
+          ];
+        });
+
+        expect(
+          () => OpenSubtitlesHasher.pickMovie(
+            options: const MoviePickerOptions(maxSizeBytes: 64 * 1024),
+          ),
+          throwsA(
+            isA<MovieFilterException>()
+                .having((error) => error.code, 'code', 'TOO_LARGE')
+                .having((error) => error.uri, 'path', file.path),
+          ),
+        );
+      }, skip: Platform.isAndroid ? 'Android uses native channel' : false);
     });
 
     group('MoviePickerOptions', () {
@@ -194,6 +275,56 @@ void main() {
         expect(options.hasPostPickFilters, isTrue);
       });
 
+      test('copyWith can clear nullable filters and colors', () {
+        const options = MoviePickerOptions(
+          minSizeBytes: 1000,
+          maxSizeBytes: 5000,
+          minDuration: Duration(minutes: 1),
+          maxDuration: Duration(minutes: 5),
+          toolbarColorHex: '#000000',
+          toolbarOnColorHex: '#FFFFFF',
+          statusBarColorHex: '#111111',
+          accentColorHex: '#F5A623',
+        );
+
+        final cleared = options.copyWith(
+          clearMinSizeBytes: true,
+          clearMaxSizeBytes: true,
+          clearMinDuration: true,
+          clearMaxDuration: true,
+          clearToolbarColorHex: true,
+          clearToolbarOnColorHex: true,
+          clearStatusBarColorHex: true,
+          clearAccentColorHex: true,
+        );
+
+        expect(cleared.hasPostPickFilters, isFalse);
+        expect(cleared.toolbarColorHex, isNull);
+        expect(cleared.toolbarOnColorHex, isNull);
+        expect(cleared.statusBarColorHex, isNull);
+        expect(cleared.accentColorHex, isNull);
+      });
+
+      test('rejects invalid duration ranges', () {
+        expect(
+          () => OpenSubtitlesHasher.pickMovie(
+            options: const MoviePickerOptions(
+              minDuration: Duration(minutes: -1),
+            ),
+          ),
+          throwsArgumentError,
+        );
+        expect(
+          () => OpenSubtitlesHasher.pickMovie(
+            options: const MoviePickerOptions(
+              minDuration: Duration(minutes: 2),
+              maxDuration: Duration(minutes: 1),
+            ),
+          ),
+          throwsArgumentError,
+        );
+      });
+
       test('toChannelMap serializes filters', () {
         final options = MoviePickerOptions.defaults.copyWith(
           mode: MoviePickerMode.systemDocuments,
@@ -203,6 +334,10 @@ void main() {
           minDuration: const Duration(minutes: 45),
           maxDuration: const Duration(hours: 3),
           takePersistablePermission: false,
+          toolbarColorHex: '#131318',
+          toolbarOnColorHex: '#F5F5F0',
+          statusBarColorHex: '#0A0A0C',
+          accentColorHex: '#F5A623',
         );
 
         final map = options.toChannelMap();
@@ -213,6 +348,10 @@ void main() {
         expect(map['minDurationMs'], 45 * 60 * 1000);
         expect(map['maxDurationMs'], 3 * 60 * 60 * 1000);
         expect(map['takePersistablePermission'], isFalse);
+        expect(map['toolbarColorHex'], '#131318');
+        expect(map['toolbarOnColorHex'], '#F5F5F0');
+        expect(map['statusBarColorHex'], '#0A0A0C');
+        expect(map['accentColorHex'], '#F5A623');
       });
 
       test('defaults use mediaStore mode', () {
@@ -224,6 +363,28 @@ void main() {
           MoviePickerOptions.defaults.toChannelMap()['mode'],
           'mediaStore',
         );
+      });
+    });
+
+    group('PickedMovie', () {
+      test('supports value equality and matching hash codes', () {
+        const first = PickedMovie(
+          path: '/movies/example.mkv',
+          name: 'example.mkv',
+          size: 1024,
+          duration: Duration(minutes: 90),
+        );
+        const same = PickedMovie(
+          path: '/movies/example.mkv',
+          name: 'example.mkv',
+          size: 1024,
+          duration: Duration(minutes: 90),
+        );
+        const different = PickedMovie(path: '/movies/other.mkv');
+
+        expect(first, same);
+        expect(first.hashCode, same.hashCode);
+        expect(first, isNot(different));
       });
     });
 
