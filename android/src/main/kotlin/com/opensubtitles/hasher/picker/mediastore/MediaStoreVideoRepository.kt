@@ -99,6 +99,14 @@ internal class MediaStoreVideoRepository(private val context: Context) {
 
         val mimeFilters = options.mimeTypes
             .filter { it.isNotBlank() && it != "video/*" && !it.endsWith("/*") }
+            .flatMap {
+                when (it.lowercase()) {
+                    "video/avi", "video/x-msvideo" ->
+                        listOf("video/avi", "video/x-msvideo")
+                    else -> listOf(it)
+                }
+            }
+            .distinct()
         if (mimeFilters.isNotEmpty()) {
             val placeholders = mimeFilters.joinToString(",") { "?" }
             selectionParts += "${MediaStore.Video.Media.MIME_TYPE} IN ($placeholders)"
