@@ -37,6 +37,8 @@ import java.util.Locale
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
+private val MARQUEE_REQUEST_TAG = View.generateViewId()
+
 /**
  * Folder browser: folders that contain matching videos → videos only.
  * Images and non-video files never appear (MediaStore.Video only).
@@ -59,6 +61,7 @@ class MovieBrowserActivity : AppCompatActivity() {
         private const val EXTRA_TOOLBAR_COLOR_HEX = "toolbarColorHex"
         private const val EXTRA_TOOLBAR_ON_COLOR_HEX = "toolbarOnColorHex"
         private const val EXTRA_STATUS_BAR_COLOR_HEX = "statusBarColorHex"
+        private const val EXTRA_ACCENT_COLOR_HEX = "accentColorHex"
 
         internal fun createIntent(context: Context, options: MoviePickerOptions): Intent {
             return Intent(context, MovieBrowserActivity::class.java).apply {
@@ -73,6 +76,7 @@ class MovieBrowserActivity : AppCompatActivity() {
                 options.toolbarColorHex?.let { putExtra(EXTRA_TOOLBAR_COLOR_HEX, it) }
                 options.toolbarOnColorHex?.let { putExtra(EXTRA_TOOLBAR_ON_COLOR_HEX, it) }
                 options.statusBarColorHex?.let { putExtra(EXTRA_STATUS_BAR_COLOR_HEX, it) }
+                options.accentColorHex?.let { putExtra(EXTRA_ACCENT_COLOR_HEX, it) }
             }
         }
     }
@@ -180,6 +184,7 @@ class MovieBrowserActivity : AppCompatActivity() {
             toolbarColorHex = intent.getStringExtra(EXTRA_TOOLBAR_COLOR_HEX),
             toolbarOnColorHex = intent.getStringExtra(EXTRA_TOOLBAR_ON_COLOR_HEX),
             statusBarColorHex = intent.getStringExtra(EXTRA_STATUS_BAR_COLOR_HEX),
+            accentColorHex = intent.getStringExtra(EXTRA_ACCENT_COLOR_HEX),
         )
     }
 
@@ -193,7 +198,7 @@ class MovieBrowserActivity : AppCompatActivity() {
         val onToolbar = parseColorOrNull(options.toolbarOnColorHex)
 
         toolbarBaseColor = toolbarColor
-        accentColor = toolbarColor
+        accentColor = parseColorOrNull(options.accentColorHex) ?: toolbarColor
 
         statusScrim.setBackgroundColor(statusColor)
         toolbar.setBackgroundColor(toolbarColor)
@@ -309,7 +314,7 @@ class MovieBrowserActivity : AppCompatActivity() {
 
         override fun onBindViewHolder(holder: Holder, position: Int) {
             val item = items[position]
-            holder.name.text = item.name
+            startLoopingMarquee(holder.name, item.name)
             holder.count.text = holder.itemView.context.getString(
                 R.string.osh_video_count,
                 item.videoCount,
@@ -346,7 +351,7 @@ class MovieBrowserActivity : AppCompatActivity() {
 
         override fun onBindViewHolder(holder: Holder, position: Int) {
             val item = items[position]
-            holder.name.text = item.name
+            startLoopingMarquee(holder.name, item.name)
             holder.meta.text = formatMeta(item.durationMs, item.sizeBytes)
             holder.thumb.setImageDrawable(null)
             holder.thumb.tag = item.id
@@ -417,6 +422,37 @@ class MovieBrowserActivity : AppCompatActivity() {
             val thumb: ImageView = view.findViewById(R.id.osh_video_thumb)
             val name: TextView = view.findViewById(R.id.osh_video_name)
             val meta: TextView = view.findViewById(R.id.osh_video_meta)
+        }
+    }
+}
+
+private fun startLoopingMarquee(label: TextView, text: String) {
+    val requestId = (label.getTag(MARQUEE_REQUEST_TAG) as? Int ?: 0) + 1
+    label.setTag(MARQUEE_REQUEST_TAG, requestId)
+    label.isSelected = false
+    label.ellipsize = android.text.TextUtils.TruncateAt.MARQUEE
+    label.isSingleLine = true
+    label.marqueeRepeatLimit = -1
+    label.isHorizontalFadingEdgeEnabled = true
+    label.setFadingEdgeLength((8 * label.resources.displayMetrics.density).toInt())
+    label.text = text
+
+    fun applyIfCurrent() {
+        if (label.getTag(MARQUEE_REQUEST_TAG) != requestId) return
+        val layout = label.layout
+        val overflows = if (layout != null && label.width > 0) {
+            layout.getLineWidth(0) > label.width
+        } else {
+            false
+        }
+        label.isSelected = overflows
+    }
+
+    label.post {
+        if (label.width == 0) {
+            label.post { applyIfCurrent() }
+        } else {
+            applyIfCurrent()
         }
     }
 }
