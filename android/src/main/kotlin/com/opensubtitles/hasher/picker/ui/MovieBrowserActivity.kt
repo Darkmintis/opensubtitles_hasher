@@ -37,7 +37,7 @@ import java.util.Locale
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
-private val MARQUEE_REQUEST_TAG = View.generateViewId()
+private val MARQUEE_REQUEST_TAG = R.id.osh_marquee_request_tag
 
 /**
  * Folder browser: folders that contain matching videos → videos only.
