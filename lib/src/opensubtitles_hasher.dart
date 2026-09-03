@@ -14,7 +14,9 @@ import 'platform/hasher_channel.dart';
 /// - Android `content://` URIs → native Kotlin (zero-copy)
 ///
 /// **Picking**
-/// - Android → native folder browser (videos only, filters apply in query)
+/// - Android default → system Documents UI (`MoviePickerMode.systemDocuments`)
+/// - Android branded → SAF folder browser (`MoviePickerMode.safFolder`)
+/// - Android legacy → MediaStore when the host declares storage permissions
 /// - iOS / macOS / Windows / Linux → system file dialog via `file_picker`
 ///
 /// Single API for everything:
@@ -92,7 +94,8 @@ class OpenSubtitlesHasher {
   /// ```dart
   /// final picked = await OpenSubtitlesHasher.pickMovie(
   ///   options: MoviePickerOptions.defaults.copyWith(
-  ///     minDuration: Duration(minutes: 30), // Android only - hides short clips
+  ///     mode: MoviePickerMode.safFolder, // branded Play-safe browser
+  ///     minDuration: Duration(minutes: 30),
   ///     toolbarColorHex: '#F5A623',
   ///   ),
   /// );

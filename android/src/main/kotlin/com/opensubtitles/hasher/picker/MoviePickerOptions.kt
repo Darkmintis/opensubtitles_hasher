@@ -3,13 +3,12 @@ package com.opensubtitles.hasher.picker
 /**
  * Options for the movie picker, parsed from the Dart method-channel map.
  *
- * [mode] defaults to [PickerMode.MEDIA_STORE] (folder browser, videos only).
- * Size/duration/MIME filters are applied in the MediaStore query so unwanted
- * files never appear in the UI.
+ * [mode] defaults to [PickerMode.SYSTEM_DOCUMENTS] (no storage permission).
  */
 internal enum class PickerMode {
-    MEDIA_STORE,
     SYSTEM_DOCUMENTS,
+    SAF_FOLDER,
+    MEDIA_STORE,
 }
 
 internal data class MoviePickerOptions(
@@ -19,7 +18,7 @@ internal data class MoviePickerOptions(
     val minDurationMs: Long? = null,
     val maxDurationMs: Long? = null,
     val takePersistablePermission: Boolean = true,
-    val mode: PickerMode = PickerMode.MEDIA_STORE,
+    val mode: PickerMode = PickerMode.SYSTEM_DOCUMENTS,
     val toolbarColorHex: String? = null,
     val toolbarOnColorHex: String? = null,
     val statusBarColorHex: String? = null,
@@ -42,9 +41,10 @@ internal data class MoviePickerOptions(
             }
 
             val mode = when ((args["mode"] as? String)?.lowercase()) {
-                "systemdocuments", "system_documents", "saf", "documents" ->
-                    PickerMode.SYSTEM_DOCUMENTS
-                else -> PickerMode.MEDIA_STORE
+                "mediastore", "media_store" -> PickerMode.MEDIA_STORE
+                "saffolder", "saf_folder", "saf", "tree", "documenttree" ->
+                    PickerMode.SAF_FOLDER
+                else -> PickerMode.SYSTEM_DOCUMENTS
             }
 
             return MoviePickerOptions(

@@ -1,55 +1,59 @@
 /// How the Android movie picker presents files.
 enum MoviePickerMode {
-  /// Folder browser: lists only folders that contain matching videos, then
-  /// videos in the selected folder.
-  ///
-  /// Images and documents never appear. [MoviePickerOptions] filters
-  /// (duration, size, MIME) hide non-matching videos from the list.
-  /// Requests video read permission; falls back to [systemDocuments] if
-  /// denied.
-  mediaStore,
-
   /// System Documents UI with MIME filter. No storage permission required.
   /// Size/duration filters are checked after the user selects a file.
+  ///
+  /// Default mode. Play Store safe.
   systemDocuments,
+
+  /// Branded folder browser after the user grants a folder via SAF
+  /// (`OPEN_DOCUMENT_TREE`). Video-only list with the same filters and theme
+  /// colors as [mediaStore]. No `READ_MEDIA_VIDEO` required.
+  ///
+  /// Recommended for Play apps that want a custom picker UI.
+  safFolder,
+
+  /// MediaStore folder browser across the whole device. Requires the **host
+  /// app** to declare storage permissions (`READ_MEDIA_VIDEO` on API 33+).
+  /// The plugin never declares those permissions. Falls back to
+  /// [systemDocuments] if permission is missing.
+  ///
+  /// Not recommended for Google Play; use for sideload / non-Play builds.
+  mediaStore,
 }
 
 /// Customizable options for the cross-platform movie picker.
 ///
-/// Everything is optional. Defaults: [MoviePickerMode.mediaStore], all
+/// Everything is optional. Defaults: [MoviePickerMode.systemDocuments], all
 /// videos (`video/*`), no size or duration limits. Use [copyWith] to
 /// tighten filters or switch modes.
 ///
 /// ```dart
-/// // Folder browser, only movies ≥ 120 minutes
+/// // Play-safe branded browser (Android)
 /// await OpenSubtitlesHasher.pickMovie(
 ///   options: MoviePickerOptions.defaults.copyWith(
-///     minDuration: Duration(minutes: 120),
+///     mode: MoviePickerMode.safFolder,
+///     minDuration: Duration(minutes: 30),
 ///   ),
 /// );
 ///
-/// // Disable folder browser → system Documents UI
-/// await OpenSubtitlesHasher.pickMovie(
-///   options: MoviePickerOptions.defaults.copyWith(
-///     mode: MoviePickerMode.systemDocuments,
-///   ),
-/// );
+/// // System Documents UI (default)
+/// await OpenSubtitlesHasher.pickMovie();
 /// ```
 class MoviePickerOptions {
   /// Default MIME filter: all video types.
   static const List<String> defaultMimeTypes = ['video/*'];
 
-  /// Picker UI mode. Defaults to [MoviePickerMode.mediaStore] (folder browser).
-  /// Set to [MoviePickerMode.systemDocuments] to disable the folder browser.
+  /// Picker UI mode. Defaults to [MoviePickerMode.systemDocuments].
   final MoviePickerMode mode;
 
-  /// MIME types to include. Folder browser is always video-only; specific
+  /// MIME types to include. Folder browsers are always video-only; specific
   /// types (e.g. `video/mp4`) further narrow the list.
   final List<String> mimeTypes;
 
   /// Minimum file size in bytes (inclusive). `null` = no minimum.
   ///
-  /// Folder browser: applied in the query - smaller files never appear.
+  /// Folder browsers: applied when listing - smaller files never appear.
   final int? minSizeBytes;
 
   /// Maximum file size in bytes (inclusive). `null` = no maximum.
@@ -57,18 +61,18 @@ class MoviePickerOptions {
 
   /// Minimum media duration (inclusive). `null` = no minimum.
   ///
-  /// Folder browser: applied in the query - shorter videos never appear.
+  /// Folder browsers: applied when listing - shorter videos never appear.
   final Duration? minDuration;
 
   /// Maximum media duration (inclusive). `null` = no maximum.
   final Duration? maxDuration;
 
   /// When true (default), requests a persistable read grant after Documents
-  /// picks. MediaStore URIs often ignore this (still fine for hashing).
+  /// / SAF picks. MediaStore URIs often ignore this (still fine for hashing).
   final bool takePersistablePermission;
 
-  /// Optional toolbar color for the Android folder browser UI.
-  /// Format: `#RRGGBB` or `#AARRGGBB`.
+  /// Optional toolbar color for the Android folder browser UI
+  /// ([safFolder] / [mediaStore]). Format: `#RRGGBB` or `#AARRGGBB`.
   final String? toolbarColorHex;
 
   /// Optional toolbar text/icon color for the Android folder browser UI.
@@ -85,7 +89,7 @@ class MoviePickerOptions {
 
   /// Creates picker options. Omit fields to keep package defaults.
   const MoviePickerOptions({
-    this.mode = MoviePickerMode.mediaStore,
+    this.mode = MoviePickerMode.systemDocuments,
     this.mimeTypes = defaultMimeTypes,
     this.minSizeBytes,
     this.maxSizeBytes,
@@ -111,7 +115,7 @@ class MoviePickerOptions {
           'minSizeBytes must be <= maxSizeBytes',
         );
 
-  /// Package defaults: folder browser, `video/*`, no size/duration limits.
+  /// Package defaults: system Documents UI, `video/*`, no size/duration limits.
   static const defaults = MoviePickerOptions();
 
   /// Alias for [defaults].
@@ -174,9 +178,11 @@ class MoviePickerOptions {
 
   /// Serializes options for the Android method channel.
   Map<String, Object?> toChannelMap() => {
-        'mode': mode == MoviePickerMode.systemDocuments
-            ? 'systemDocuments'
-            : 'mediaStore',
+        'mode': switch (mode) {
+          MoviePickerMode.systemDocuments => 'systemDocuments',
+          MoviePickerMode.safFolder => 'safFolder',
+          MoviePickerMode.mediaStore => 'mediaStore',
+        },
         'mimeTypes': mimeTypes,
         'minSizeBytes': minSizeBytes,
         'maxSizeBytes': maxSizeBytes,

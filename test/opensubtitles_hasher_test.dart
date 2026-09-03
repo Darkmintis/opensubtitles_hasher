@@ -354,13 +354,34 @@ void main() {
         expect(map['accentColorHex'], '#F5A623');
       });
 
-      test('defaults use mediaStore mode', () {
+      test('defaults use systemDocuments mode', () {
         expect(
           MoviePickerOptions.defaults.mode,
-          MoviePickerMode.mediaStore,
+          MoviePickerMode.systemDocuments,
         );
         expect(
           MoviePickerOptions.defaults.toChannelMap()['mode'],
+          'systemDocuments',
+        );
+      });
+
+      test('toChannelMap serializes all three Android modes', () {
+        expect(
+          MoviePickerOptions.defaults
+              .copyWith(mode: MoviePickerMode.systemDocuments)
+              .toChannelMap()['mode'],
+          'systemDocuments',
+        );
+        expect(
+          MoviePickerOptions.defaults
+              .copyWith(mode: MoviePickerMode.safFolder)
+              .toChannelMap()['mode'],
+          'safFolder',
+        );
+        expect(
+          MoviePickerOptions.defaults
+              .copyWith(mode: MoviePickerMode.mediaStore)
+              .toChannelMap()['mode'],
           'mediaStore',
         );
       });
