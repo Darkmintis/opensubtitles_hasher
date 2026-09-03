@@ -10,4 +10,13 @@
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:navigationBarDividerColor">@android:color/transparent</item>
     </style>
+
+    <!-- Overflow "Change folder" popup: dark text on light surface (readable). -->
+    <style name="ThemeOverlay.OpenSubtitlesHasher.ToolbarPopup" parent="ThemeOverlay.Material3.Light">
+        <item name="android:colorBackground">#FFFFFFFF</item>
+        <item name="colorSurface">#FFFFFFFF</item>
+        <item name="colorOnSurface">#FF1C1B1F</item>
+        <item name="android:textColorPrimary">#FF1C1B1F</item>
+        <item name="android:textColorSecondary">#FF49454F</item>
+    </style>
 </resources>

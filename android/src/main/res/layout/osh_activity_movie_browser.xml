@@ -22,6 +22,7 @@
         android:minHeight="?attr/actionBarSize"
         android:background="?attr/colorPrimary"
         android:theme="@style/ThemeOverlay.MaterialComponents.Dark.ActionBar"
+        app:popupTheme="@style/ThemeOverlay.OpenSubtitlesHasher.ToolbarPopup"
         app:navigationIcon="?attr/homeAsUpIndicator"
         app:title="@string/osh_picker_title"
         app:titleTextColor="@android:color/white" />

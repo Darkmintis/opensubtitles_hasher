@@ -2,9 +2,10 @@
 <resources>
     <string name="osh_picker_title">Select movie</string>
     <string name="osh_folders_title">Movie folders</string>
-    <string name="osh_empty_folders">No movie folders found</string>
+    <string name="osh_empty_folders">No movie folders found in the granted folder</string>
     <string name="osh_empty_videos">No movies in this folder</string>
     <string name="osh_video_count">%1$d movies</string>
     <string name="osh_permission_rationale">Allow video access to browse your movie folders.</string>
+    <string name="osh_change_folder">Change folder</string>
     <string name="osh_close">Close</string>
 </resources>

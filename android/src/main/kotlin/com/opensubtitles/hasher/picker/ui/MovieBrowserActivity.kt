@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -31,8 +32,10 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.opensubtitles.hasher.R
 import com.opensubtitles.hasher.picker.MoviePickerOptions
 import com.opensubtitles.hasher.picker.mediastore.MediaStoreVideoRepository
+import com.opensubtitles.hasher.picker.mediastore.VideoBrowserRepository
 import com.opensubtitles.hasher.picker.mediastore.VideoFolder
 import com.opensubtitles.hasher.picker.mediastore.VideoItem
+import com.opensubtitles.hasher.picker.saf.SafVideoRepository
 import java.util.Locale
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
@@ -41,7 +44,7 @@ private val MARQUEE_REQUEST_TAG = R.id.osh_marquee_request_tag
 
 /**
  * Folder browser: folders that contain matching videos → videos only.
- * Images and non-video files never appear (MediaStore.Video only).
+ * Backed by MediaStore or a SAF tree URI.
  *
  * Draws edge-to-edge on Android 15+ and pads system bars via WindowInsets.
  */
@@ -53,6 +56,9 @@ class MovieBrowserActivity : AppCompatActivity() {
         const val EXTRA_RESULT_SIZE = "osh_size"
         const val EXTRA_RESULT_DURATION_MS = "osh_duration_ms"
 
+        /** Returned when the user wants to pick a different SAF folder. */
+        const val RESULT_CHANGE_FOLDER = Activity.RESULT_FIRST_USER
+
         private const val EXTRA_MIN_SIZE = "minSizeBytes"
         private const val EXTRA_MAX_SIZE = "maxSizeBytes"
         private const val EXTRA_MIN_DURATION = "minDurationMs"
@@ -62,8 +68,24 @@ class MovieBrowserActivity : AppCompatActivity() {
         private const val EXTRA_TOOLBAR_ON_COLOR_HEX = "toolbarOnColorHex"
         private const val EXTRA_STATUS_BAR_COLOR_HEX = "statusBarColorHex"
         private const val EXTRA_ACCENT_COLOR_HEX = "accentColorHex"
+        private const val EXTRA_TREE_URI = "treeUri"
 
-        internal fun createIntent(context: Context, options: MoviePickerOptions): Intent {
+        internal fun createMediaStoreIntent(
+            context: Context,
+            options: MoviePickerOptions,
+        ): Intent = createIntent(context, options, treeUri = null)
+
+        internal fun createSafIntent(
+            context: Context,
+            options: MoviePickerOptions,
+            treeUri: Uri,
+        ): Intent = createIntent(context, options, treeUri = treeUri)
+
+        private fun createIntent(
+            context: Context,
+            options: MoviePickerOptions,
+            treeUri: Uri?,
+        ): Intent {
             return Intent(context, MovieBrowserActivity::class.java).apply {
                 options.minSizeBytes?.let { putExtra(EXTRA_MIN_SIZE, it) }
                 options.maxSizeBytes?.let { putExtra(EXTRA_MAX_SIZE, it) }
@@ -77,6 +99,7 @@ class MovieBrowserActivity : AppCompatActivity() {
                 options.toolbarOnColorHex?.let { putExtra(EXTRA_TOOLBAR_ON_COLOR_HEX, it) }
                 options.statusBarColorHex?.let { putExtra(EXTRA_STATUS_BAR_COLOR_HEX, it) }
                 options.accentColorHex?.let { putExtra(EXTRA_ACCENT_COLOR_HEX, it) }
+                treeUri?.let { putExtra(EXTRA_TREE_URI, it.toString()) }
             }
         }
     }
@@ -89,7 +112,7 @@ class MovieBrowserActivity : AppCompatActivity() {
     private lateinit var empty: TextView
     private lateinit var loading: ProgressBar
 
-    private lateinit var repository: MediaStoreVideoRepository
+    private lateinit var repository: VideoBrowserRepository
     private lateinit var options: MoviePickerOptions
 
     private val io = Executors.newSingleThreadExecutor()
@@ -113,10 +136,11 @@ class MovieBrowserActivity : AppCompatActivity() {
         loading = findViewById(R.id.osh_loading)
 
         list.layoutManager = LinearLayoutManager(this)
-        repository = MediaStoreVideoRepository(this)
         options = optionsFromIntent()
+        repository = buildRepository()
         applyCustomColors()
         applyWindowInsets()
+        setupChangeFolderMenu()
 
         toolbar.setNavigationOnClickListener { navigateBack() }
         onBackPressedDispatcher.addCallback(
@@ -129,6 +153,43 @@ class MovieBrowserActivity : AppCompatActivity() {
         )
 
         showFolders()
+    }
+
+    private fun buildRepository(): VideoBrowserRepository {
+        val tree = intent.getStringExtra(EXTRA_TREE_URI)
+        return if (!tree.isNullOrBlank()) {
+            SafVideoRepository(this, Uri.parse(tree))
+        } else {
+            MediaStoreVideoRepository(this)
+        }
+    }
+
+    private fun isSafMode(): Boolean =
+        !intent.getStringExtra(EXTRA_TREE_URI).isNullOrBlank()
+
+    private fun setupChangeFolderMenu() {
+        if (!isSafMode()) return
+        toolbar.inflateMenu(R.menu.osh_movie_browser)
+        // Menu inflated after applyCustomColors — re-tint overflow for contrast.
+        val onToolbar = parseColorOrNull(options.toolbarOnColorHex)
+            ?: if (ColorUtils.calculateLuminance(
+                    parseColorOrNull(options.toolbarColorHex) ?: Color.parseColor("#0B6E4F"),
+                ) >= 0.5
+            ) {
+                Color.BLACK
+            } else {
+                Color.WHITE
+            }
+        toolbar.overflowIcon?.setTint(onToolbar)
+        toolbar.setOnMenuItemClickListener { item ->
+            if (item.itemId == R.id.osh_action_change_folder) {
+                setResult(RESULT_CHANGE_FOLDER)
+                finish()
+                true
+            } else {
+                false
+            }
+        }
     }
 
     private fun applyWindowInsets() {
@@ -196,16 +257,24 @@ class MovieBrowserActivity : AppCompatActivity() {
         val toolbarColor = parseColorOrNull(options.toolbarColorHex) ?: defaultPrimary
         val statusColor = parseColorOrNull(options.statusBarColorHex) ?: toolbarColor
         val onToolbar = parseColorOrNull(options.toolbarOnColorHex)
+            ?: if (ColorUtils.calculateLuminance(toolbarColor) >= 0.5) {
+                Color.BLACK
+            } else {
+                Color.WHITE
+            }
 
         toolbarBaseColor = toolbarColor
         accentColor = parseColorOrNull(options.accentColorHex) ?: toolbarColor
 
         statusScrim.setBackgroundColor(statusColor)
         toolbar.setBackgroundColor(toolbarColor)
-
-        if (onToolbar != null) {
-            toolbar.setTitleTextColor(onToolbar)
-            toolbar.navigationIcon?.setTint(onToolbar)
+        toolbar.setTitleTextColor(onToolbar)
+        toolbar.navigationIcon?.setTint(onToolbar)
+        toolbar.overflowIcon?.setTint(onToolbar)
+        toolbar.menu?.let { menu ->
+            for (i in 0 until menu.size()) {
+                menu.getItem(i).icon?.setTint(onToolbar)
+            }
         }
 
         val lightStatusIcons = ColorUtils.calculateLuminance(statusColor) >= 0.5
@@ -258,7 +327,7 @@ class MovieBrowserActivity : AppCompatActivity() {
 
         io.execute {
             val videos = try {
-                repository.loadVideosInFolder(folder.bucketId, options)
+                repository.loadVideosInFolder(folder.id, options)
             } catch (_: SecurityException) {
                 emptyList()
             }
@@ -377,13 +446,18 @@ class MovieBrowserActivity : AppCompatActivity() {
                         null,
                     )
                 } else {
-                    @Suppress("DEPRECATION")
-                    MediaStore.Video.Thumbnails.getThumbnail(
-                        context.contentResolver,
-                        item.id,
-                        MediaStore.Video.Thumbnails.MINI_KIND,
-                        null,
-                    )
+                    val mediaId = item.id.toLongOrNull()
+                    if (mediaId != null) {
+                        @Suppress("DEPRECATION")
+                        MediaStore.Video.Thumbnails.getThumbnail(
+                            context.contentResolver,
+                            mediaId,
+                            MediaStore.Video.Thumbnails.MINI_KIND,
+                            null,
+                        )
+                    } else {
+                        null
+                    }
                 }
             } catch (_: Exception) {
                 null
@@ -391,9 +465,13 @@ class MovieBrowserActivity : AppCompatActivity() {
         }
 
         private fun formatMeta(durationMs: Long, sizeBytes: Long): String {
-            val duration = formatDuration(durationMs)
             val size = formatSize(sizeBytes)
-            return "$duration · $size"
+            // SAF listings often have no duration (0); hide 0:00 and show size only.
+            return if (durationMs > 0L) {
+                "${formatDuration(durationMs)} · $size"
+            } else {
+                size
+            }
         }
 
         private fun formatDuration(ms: Long): String {
