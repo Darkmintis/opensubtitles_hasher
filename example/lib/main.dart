@@ -35,8 +35,8 @@ class DemoPage extends StatefulWidget {
 class _DemoPageState extends State<DemoPage> {
   final _pathController = TextEditingController();
 
-  /// Folder browser on by default (mediaStore). Off → system Documents UI.
-  bool _folderBrowser = true;
+  /// Android picker mode. Default matches package default.
+  MoviePickerMode _mode = MoviePickerMode.systemDocuments;
 
   /// 0 = filter off.
   int _minDurationMinutes = 0;
@@ -75,9 +75,7 @@ class _DemoPageState extends State<DemoPage> {
         : _mimeKeys.map((k) => _mimeChoices[k]!).toList();
 
     return MoviePickerOptions(
-      mode: _folderBrowser
-          ? MoviePickerMode.mediaStore
-          : MoviePickerMode.systemDocuments,
+      mode: _mode,
       mimeTypes: mimes,
       minDuration: _minDurationMinutes > 0
           ? Duration(minutes: _minDurationMinutes)
@@ -245,24 +243,29 @@ class _DemoPageState extends State<DemoPage> {
           const SizedBox(height: 4),
           Text(
             _isAndroid
-                ? 'Folder browser lists only folders that contain videos '
-                    'matching your filters. Raise min duration to hide short clips.'
+                ? 'systemDocuments: system file UI (Play-safe).\n'
+                    'safFolder: grant one folder, then branded video browser '
+                    '(Play-safe). Use ⋮ Change folder to pick again.\n'
+                    'mediaStore: whole-device browser (needs READ_MEDIA_VIDEO '
+                    'in the host app + runtime grant; not for Play).'
                 : 'System file dialog filtered by video extension. '
                     'Duration / size filters are Android-only.',
             style: theme.textTheme.bodySmall,
           ),
           if (_isAndroid) ...[
             const SizedBox(height: 12),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Folder browser'),
-              subtitle: Text(
-                _folderBrowser
-                    ? 'On - folders with matching videos only'
-                    : 'Off - system Documents UI',
-              ),
-              value: _folderBrowser,
-              onChanged: (v) => setState(() => _folderBrowser = v),
+            Text('Android mode', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: MoviePickerMode.values.map((mode) {
+                return ChoiceChip(
+                  label: Text(mode.name),
+                  selected: _mode == mode,
+                  onSelected: (_) => setState(() => _mode = mode),
+                );
+              }).toList(),
             ),
             const SizedBox(height: 8),
             _StepperRow(
