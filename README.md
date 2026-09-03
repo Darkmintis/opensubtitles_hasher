@@ -7,7 +7,8 @@ Fast OpenSubtitles hashing and movie picking for Flutter - all platforms, one AP
 
 - **Instant hash** - reads only **128 KB**, even for 50 GB files
 - **Built-in picker** - works on Android, iOS, macOS, Windows, and Linux
-- **Android folder browser** - videos only, no images or docs; filters apply at the query level
+- **Play-safe by default** - Android uses the system Documents UI (no `READ_MEDIA_VIDEO`)
+- **Optional branded browser** - SAF folder grant (`safFolder`) for custom video-only UI
 - **Zero-copy** - Android `content://` URI → native Kotlin hash (no full-file copy)
 
 ---
@@ -16,7 +17,7 @@ Fast OpenSubtitles hashing and movie picking for Flutter - all platforms, one AP
 
 ```yaml
 dependencies:
-  opensubtitles_hasher: ^1.1.4
+  opensubtitles_hasher: ^1.2.0
 ```
 
 ```bash
@@ -65,11 +66,9 @@ print(result.toApiMap()); // ready for the OpenSubtitles API
 
 | Platform | Picker | Hash |
 |----------|--------|------|
-| Android | Native folder browser (MediaStore) + SAF fallback | Native Kotlin (zero-copy `content://`) |
+| Android | See [Android picker modes](#android-picker-modes) below | Native Kotlin (zero-copy `content://`) |
 | iOS / macOS / Windows / Linux | System file dialog (video extensions) | Pure Dart |
 | Web | Not supported | Not supported |
-
-On Android, the folder browser shows **only folders that contain matching videos**. Images and documents never appear. Filters (duration, size, MIME) are applied in the MediaStore query - short clips and small files are hidden before the UI renders.
 
 On other platforms the system file dialog filters by video extension. Size
 limits are checked immediately after selection. Duration limits cannot be
@@ -77,38 +76,98 @@ checked because system file dialogs do not provide media duration metadata.
 
 ---
 
-## Android picker - make it yours
+## Android picker modes
+
+Choosing a mode in Dart **does not** change which permissions land in your AAB.
+Permissions come only from merged manifests. **This plugin never declares
+`READ_MEDIA_VIDEO`.**
+
+| Mode | Play Store | Custom UI | Permission |
+|------|------------|-----------|------------|
+| `systemDocuments` (**default**) | Yes | No (system UI) | None |
+| `safFolder` | Yes | Yes (branded, video-only) | Folder grant via SAF |
+| `mediaStore` | Usually no | Yes (whole-device MediaStore) | Host app must declare storage / `READ_MEDIA_VIDEO` |
+
+### Default — system Documents UI
+
+```dart
+await OpenSubtitlesHasher.pickMovie(); // MoviePickerMode.systemDocuments
+```
+
+One system file dialog. Google Play safe.
+
+### Recommended branded UI — SAF folder browser
+
+User grants a Movies / Downloads folder once; your themed folder → video list
+opens. The grant is remembered for later picks.
 
 ```dart
 await OpenSubtitlesHasher.pickMovie(
   options: MoviePickerOptions.defaults.copyWith(
-    // Folder browser on by default. Switch to system Documents UI:
-    // mode: MoviePickerMode.systemDocuments,
+    mode: MoviePickerMode.safFolder,
+    minDuration: Duration(minutes: 30),
+    toolbarColorHex: '#1F6FEB',
+    toolbarOnColorHex: '#FFFFFF',
+    statusBarColorHex: '#174EA6',
+    accentColorHex: '#58A6FF',
+  ),
+);
+```
 
+### Legacy — MediaStore (host permission required)
+
+Use only for sideload / non-Play builds. Add permissions in **your app**
+manifest (not this plugin):
+
+```xml
+<uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+<uses-permission
+    android:name="android.permission.READ_EXTERNAL_STORAGE"
+    android:maxSdkVersion="32" />
+```
+
+```dart
+await OpenSubtitlesHasher.pickMovie(
+  options: MoviePickerOptions.defaults.copyWith(
+    mode: MoviePickerMode.mediaStore,
+  ),
+);
+```
+
+When `mediaStore` is selected, the plugin requests the runtime permission.
+If the host never declared it, or the user denies, the package falls back to
+`systemDocuments`.
+
+---
+
+## Options reference
+
+```dart
+await OpenSubtitlesHasher.pickMovie(
+  options: MoviePickerOptions.defaults.copyWith(
+    mode: MoviePickerMode.safFolder,
     mimeTypes: ['video/mp4', 'video/x-matroska'],
-    minSizeBytes: 50 * 1024 * 1024,       // at least 50 MB
-    minDuration: Duration(minutes: 30),   // hides clips shorter than 30 min
-    toolbarColorHex: '#1F6FEB',           // optional toolbar colour
-    toolbarOnColorHex: '#FFFFFF',         // toolbar text / icon colour
-    statusBarColorHex: '#174EA6',         // status bar colour
-    accentColorHex: '#58A6FF',            // folder icons / highlights
+    minSizeBytes: 50 * 1024 * 1024,
+    minDuration: Duration(minutes: 30),
+    toolbarColorHex: '#1F6FEB',
+    toolbarOnColorHex: '#FFFFFF',
+    statusBarColorHex: '#174EA6',
+    accentColorHex: '#58A6FF',
   ),
 );
 ```
 
 | Option | What it does |
 |--------|--------------|
-| `mode` | `mediaStore` = folder browser · `systemDocuments` = system file UI |
+| `mode` | `systemDocuments` · `safFolder` · `mediaStore` |
 | `mimeTypes` | Which video types to show (default: `video/*`) |
 | `minSizeBytes` / `maxSizeBytes` | Size limits (`null` = off) |
 | `minDuration` / `maxDuration` | Duration limits (`null` = off) |
-| `toolbarColorHex` | Folder browser toolbar colour (`#RRGGBB` / `#AARRGGBB`) |
+| `toolbarColorHex` | Folder browser toolbar colour (`safFolder` / `mediaStore`) |
 | `toolbarOnColorHex` | Toolbar title + icon colour |
 | `statusBarColorHex` | Status bar colour for the picker screen |
-| `accentColorHex` | Folder icon / highlight colour (defaults to toolbar colour) |
-| `takePersistablePermission` | Keep URI readable later (Documents mode only) |
-
-The folder browser requests video read permission. If the user denies it the package falls back to the system Documents UI automatically.
+| `accentColorHex` | Folder icon / highlight colour |
+| `takePersistablePermission` | Keep URI readable later (Documents / SAF) |
 
 ---
 
@@ -122,7 +181,7 @@ if (movie != null) {
   movie.path;          // Filesystem path (iOS, macOS, Windows, Linux)
   movie.name;          // Display name
   movie.size;          // Bytes (if reported)
-  movie.duration;      // Duration (Android folder browser only)
+  movie.duration;      // Duration (Android folder browsers when available)
 }
 ```
 
@@ -192,7 +251,7 @@ cd example
 flutter run
 ```
 
-On Android: toggle folder browser, step min duration / min size, pick video types, then tap **Pick movie + hash**. On other platforms: tap the same button - the system file dialog opens.
+On Android: pick a mode (`systemDocuments` / `safFolder` / `mediaStore`), step min duration / min size, pick video types, then tap **Pick movie + hash**.
 
 ---
 

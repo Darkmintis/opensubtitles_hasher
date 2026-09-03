@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.0] - 2026-09-03
+
+### Added
+
+- Android `MoviePickerMode.safFolder`: branded video-only folder browser after
+  a one-time SAF (`OPEN_DOCUMENT_TREE`) grant. No `READ_MEDIA_VIDEO`. Remembers
+  the last granted tree for later picks.
+- Shared `VideoBrowserRepository` so MediaStore and SAF backends share one
+  `MovieBrowserActivity` UI.
+
+### Changed
+
+- Default Android picker mode is `systemDocuments` (Play-safe system file UI).
+- Plugin never declares `READ_MEDIA_VIDEO` / `READ_EXTERNAL_STORAGE`. Hosts that
+  want `mediaStore` must declare those permissions themselves; otherwise the
+  package falls back to `systemDocuments`.
+- README documents all three modes, Play guidance, and host-manifest snippets.
+
+### Breaking
+
+- Apps that relied on the old default MediaStore folder browser without
+  declaring host storage permissions will now open the system Documents UI.
+  Opt into `MoviePickerMode.safFolder` (Play) or `mediaStore` (sideload + host
+  permissions) explicitly.
+
 ## [1.1.4] - 2026-08-20
 
 ### Added
