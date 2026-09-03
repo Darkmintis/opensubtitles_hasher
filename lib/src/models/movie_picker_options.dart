@@ -170,9 +170,8 @@ class MoviePickerOptions {
       statusBarColorHex: clearStatusBarColorHex
           ? null
           : (statusBarColorHex ?? this.statusBarColorHex),
-      accentColorHex: clearAccentColorHex
-          ? null
-          : (accentColorHex ?? this.accentColorHex),
+      accentColorHex:
+          clearAccentColorHex ? null : (accentColorHex ?? this.accentColorHex),
     );
   }
 

@@ -45,6 +45,5 @@ class ParsedVideoName {
       other.originalName == originalName;
 
   @override
-  int get hashCode =>
-      Object.hash(title, year, season, episode, originalName);
+  int get hashCode => Object.hash(title, year, season, episode, originalName);
 }

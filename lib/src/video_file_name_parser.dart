@@ -147,12 +147,14 @@ class VideoFileNameParser {
       }
     }
 
-    working = working.replaceAll('.', ' ').replaceAll('_', ' ').replaceAll('-', ' ');
+    working =
+        working.replaceAll('.', ' ').replaceAll('_', ' ').replaceAll('-', ' ');
     working = working.replaceAll(_multiSpacePattern, ' ').trim();
 
     final kept = <String>[];
     for (final token in working.split(' ')) {
-      final normalized = token.toLowerCase().replaceAll(RegExp(r'[^a-z0-9.+]'), '');
+      final normalized =
+          token.toLowerCase().replaceAll(RegExp(r'[^a-z0-9.+]'), '');
       if (normalized.isEmpty) continue;
       if (_junkTokens.contains(normalized)) continue;
       kept.add(token);
