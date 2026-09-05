@@ -1,8 +1,8 @@
 name: opensubtitles_hasher
 description: >-
-  Fast OpenSubtitles hashing (128 KB only). Built-in movie picker for all
-  platforms. Android: Play-safe system Documents default, optional SAF branded
-  folder browser, legacy MediaStore when the host declares storage permissions.
+  Compute OpenSubtitles hash from video files with minimal I/O. Includes a
+  cross-platform file picker. Android supports SAF, MediaStore, and branded
+  folder browser.
 version: 1.2.0
 homepage: https://github.com/Darkmintis/opensubtitles_hasher
 repository: https://github.com/Darkmintis/opensubtitles_hasher
